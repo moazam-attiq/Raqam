@@ -1,50 +1,44 @@
 # TASKS.md — Current milestone checklist
 
-## M0 — Repository and development environment
+## M1 — Architecture foundation
 
-Source: spec §11 Phase 0 and §14. "AI workspace" below means the AI's Linux
-cloud environment (.NET SDK 10.0.114, Node 22.23.4), not the developer's Mac.
+Source: spec §11 Phase 1. The AI cannot restore NuGet packages or reach the
+Mac's shell (BLOCKERS B004): the AI writes code and commands, the user runs
+them on the Mac and shares the output. Add only the packages this phase needs.
 
-### Part 1 — Inspection
+### Part 1 — Setup (user, on the Mac)
 
-- [x] Inspect the Raqam project folder — empty on 2026-11-10
-- [x] Earlier `ExpenseTracker` work — user confirmed there is nothing to migrate (2026-11-10)
-- [ ] Verify tool versions on the Mac: `dotnet --version`, `node --version`, `npm --version`, `psql --version`, `podman --version` (BLOCKERS B002)
+- [x] Local PostgreSQL: the installed PostgreSQL 17.10 on the Mac (D011)
+- [x] Local role and database `raqam_dev` created; user showed a successful connection as `raqam_dev`
+- [x] `Npgsql.EntityFrameworkCore.PostgreSQL` 10.0.3 (Infrastructure) and `Microsoft.EntityFrameworkCore.Design` 10.0.14 (Api) added on the Mac
+- [ ] OpenAPI package (Api)
+- [x] `dotnet-ef` installed as a local tool via `dotnet new tool-manifest` + `dotnet tool install dotnet-ef`
 
 ### Part 2 — Implementation
 
-- [x] `.gitignore` covering .NET, Node, `.env`, and macOS files
-- [x] `backend/Raqam.sln`
-- [x] `Raqam.Domain`, `Raqam.Application`, `Raqam.Infrastructure` (class libraries), `Raqam.Api` (ASP.NET Core, controllers — D010)
-- [x] All four projects added to the solution
-- [x] Project references: Application → Domain; Infrastructure → Application, Domain; Api → Application, Infrastructure
-- [x] `frontend/raqam-web` with Vite (React + TypeScript)
-- [x] Tailwind CSS added to the frontend
-- [x] `.env.example` (root and frontend) with placeholder values only
-- [x] Basic `README.md`
-- [ ] `git init` on the Mac (BLOCKERS B003)
+- [x] `RaqamDbContext` in Infrastructure (no entities yet)
+- [x] `AddInfrastructure` extension, composed in `Program.cs`. `AddApplication` is added when Application has something to register
+- [x] Connection string from configuration (`ConnectionStrings:Default`), supplied locally through .NET user-secrets (D011), never committed
+- [x] Global exception handling (`GlobalExceptionHandler`, ProblemDetails) — built on the Mac
+- [ ] Request validation approach wired in (FluentValidation or equivalent — record the choice in `DECISIONS.md`)
+- [x] OpenAPI enabled in Development via built-in `Microsoft.AspNetCore.OpenApi` (`AddOpenApi`/`MapOpenApi`) — `GET /openapi/v1.json` returns 200 (user showed output, 2026-11-10)
+- [x] `/health` endpoint with a database check (`DatabaseHealthCheck` in Api); placeholder `PingController` removal requested, not confirmed
+- [ ] Logging configuration (structured console logging)
+- [x] Initial EF Core migration `InitialCreate` created and applied to `raqam_dev` (empty — no entities yet)
+- [ ] Test project with one integration test (health endpoint)
 
 ### Part 3 — Verification
 
-In the AI workspace (done, session 2):
-
-- [x] `dotnet build backend/Raqam.sln` — 0 warnings, 0 errors
-- [x] API starts; `GET http://localhost:5196/api/v1/ping` returned HTTP 200
-- [x] `npm run build` and `npm run lint` clean
-- [x] Frontend dev server answered HTTP 200 on port 5173
-- [x] Tailwind utilities present in the built CSS
-- [x] Domain project has no project or package references
-
-On the developer's Mac (pending, user):
-
-- [ ] `cd backend && dotnet build Raqam.sln`
-- [ ] `dotnet run --project src/Raqam.Api`, then `curl http://localhost:5196/api/v1/ping`
-- [ ] `cd frontend/raqam-web && npm install && npm run build`
-- [ ] `npm run dev`, open http://localhost:5173, see the centred "Raqam" heading styled by Tailwind
-- [ ] `git status` shows no `.env`, `node_modules`, `bin`, or `obj` entries
+- [ ] `dotnet build backend/Raqam.sln` clean
+- [x] API connects to local PostgreSQL (user showed output, 2026-11-10)
+- [x] `GET /health` responds healthy — `200 OK`, body `Healthy` (user showed output, 2026-11-10)
+- [x] Migration applied cleanly; `__EFMigrationsHistory` created (user ran `dotnet ef database update`, 2026-11-10)
+- [ ] `dotnet test backend/Raqam.sln` passes
+- [ ] No connection string or secret in `git status` / committed files
 
 ### Part 4 — Documentation
 
-- [x] `PROJECT.md` Definition of Done and repository structure updated to what exists
-- [ ] First commits: `chore: initialize Raqam solution structure`, `chore: configure frontend tooling`
-- [ ] When every Mac item above is confirmed by the user: add a `PROGRESS.md` entry, mark M0 `[x]` in `ROADMAP.md`, resolve B002/B003, and replace this file with the M1 checklist
+- [ ] README run instructions updated (database setup, migrations, tests)
+- [ ] `docs/architecture.md` started if useful
+- [ ] `DECISIONS.md` updated for choices made here (validation library, OpenAPI package, how local secrets are supplied)
+- [ ] `PROGRESS.md` entry; close M1 in `ROADMAP.md` only when every Part 3 item is confirmed; replace this file with the M2 checklist

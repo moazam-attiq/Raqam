@@ -20,7 +20,7 @@ time; the default order below is the specification's order.
 
 ---
 
-## [~] M0 — Repository and development environment
+## [x] M0 — Repository and development environment
 
 **Objective:** a clean, building skeleton in the specified structure.
 
@@ -42,7 +42,11 @@ frontend start, and lint verified in the AI's Linux workspace (.NET SDK
 Mac, `git init`, and the first commit. Stays `[~]` until the user confirms
 those.
 
-## [ ] M1 — Architecture foundation
+**Completed 2026-11-10 (session 3):** the user confirmed the checks on the Mac
+were good and that the repository is pushed to GitHub. Completion rests on
+that confirmation; the AI did not see the command output.
+
+## [~] M1 — Architecture foundation
 
 **Objective:** the API talks to PostgreSQL with production-shaped plumbing.
 
@@ -180,6 +184,5 @@ Action Rule.
 
 ## Current milestone
 
-**M0 — Repository and development environment** (in progress; scaffolded and
-verified in the AI workspace, awaiting verification on the developer's Mac and
-the first Git commit). Detailed checklist: `TASKS.md`.
+**M1 — Architecture foundation** (in progress; nothing implemented yet).
+Detailed checklist: `TASKS.md`.

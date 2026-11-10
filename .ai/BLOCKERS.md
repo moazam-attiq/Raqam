@@ -6,42 +6,6 @@ anything non-trivial.
 
 ## Open now
 
-### B002 — Local toolchain versions unverified
-
-- **Type:** User action (commands must run on the developer's Mac).
-- **What is blocked:** closing M0 (its exit criteria must hold on the
-  developer's machine).
-- **Why:** the specification reports .NET SDK 10.0.402, Node.js 22.13.0,
-  npm 10.9.2, PostgreSQL 17.10, Podman 5.8.5 on macOS 13.7.8 (2017 Intel
-  MacBook Pro) and itself says versions may have changed.
-- **Update (session 2):** the skeleton was generated with .NET SDK 10.0.114
-  and Node 22.23.4 in the AI's Linux workspace, a different SDK feature band
-  from the reported 10.0.402. Projects target `net10.0` with no `global.json`,
-  so this should not matter, but it is unconfirmed until built on the Mac.
-  The frontend's Vite 8 needs a recent Node 22; the reported 22.13.0 is
-  expected to satisfy it, unconfirmed.
-- **Next action:** run `dotnet --version`, `node --version`, `npm --version`,
-  `psql --version`, `podman --version` and share the output.
-- **Workaround:** none needed.
-- **Resolved when:** actual versions and the results of `dotnet build`,
-  `dotnet run`, `npm install`, `npm run build`, and `npm run dev` on the Mac
-  are recorded in `PROGRESS.md`. Do not reinstall anything unless a
-  compatibility problem is demonstrated.
-
-### B003 — Git repository and GitHub remote state unknown
-
-- **Type:** User action.
-- **What is blocked:** commits and, later, deployments (Vercel and Render
-  deploy from GitHub).
-- **Why:** it was not verified whether the Raqam folder is a Git repository,
-  and no GitHub repository is known to exist.
-- **Next action:** check for `.git` (`ls -la`); `git init` if absent; the user
-  creates the GitHub repository and adds the remote when ready.
-- **Workaround:** local work can proceed with a local repository only.
-- **Resolved when:** the user confirms the remote exists and the first push
-  succeeded.
-
-
 ### B004 — AI workspace cannot restore NuGet packages or reach the Mac's shell
 
 - **Type:** AI limitation.
@@ -84,3 +48,19 @@ None known. Only skeleton code exists.
   scaffold from scratch. No `ExpenseTracker` directory was inspected by the AI.
 - **Context:** spec §14 required inspecting any earlier `ExpenseTracker` setup
   before creating the Raqam structure.
+
+### B002 — Local toolchain versions unverified
+
+- **Resolved:** 2026-11-10 (session 3), user-confirmed.
+- **What was done:** the user ran the M0 checks on the Mac and reported
+  "everything is good". The exact tool versions and command output were not
+  shared, so the versions in the specification remain the only record.
+- **Context:** the skeleton was generated with .NET SDK 10.0.114 on Linux; the
+  Mac was reported to have 10.0.402.
+
+### B003 — Git repository and GitHub remote state unknown
+
+- **Resolved:** 2026-11-10 (session 3), user-confirmed.
+- **What was done:** the user initialized Git and pushed to GitHub. A `.git`
+  directory is present in the project folder. The remote URL is not recorded
+  here.

@@ -182,3 +182,44 @@ not chosen.
 **Consequence:** New endpoints are controller classes in
 `Raqam.Api/Controllers`. Cheap to reverse now (one placeholder controller);
 reverse only through a new decision.
+
+## 2026-11-10 — D011: Local development uses the Mac's installed PostgreSQL and .NET user-secrets
+
+**Status:** Active. Source: session 3; user chose the installed PostgreSQL.
+
+**Decision:** Local development connects to the PostgreSQL 17 installed on the
+developer's Mac, database `raqam_dev`, role `raqam_dev` (not the `postgres`
+admin). The API reads `ConnectionStrings:Default`; locally the value is stored
+with .NET user-secrets on `Raqam.Api`, and hosted environments supply it as the
+environment variable `ConnectionStrings__Default`.
+
+**Why:** Simplest repeatable setup (spec §9.5); user-secrets keeps the password
+outside the repository without extra packages.
+
+**Alternatives considered:** Podman PostgreSQL container — available, not
+needed yet. A `.env` file loaded by the API — would need an extra package.
+
+**Consequence:** No `docker-compose.yml` yet. The API fails fast at startup if
+the connection string is missing. The database health check lives in
+`Raqam.Api` because Infrastructure has no health-check package.
+
+## 2026-11-10 — D012: Built-in Microsoft.AspNetCore.OpenApi for API documentation
+
+**Status:** Active. Source: session 3 (M1 Part 2).
+
+**Decision:** Use the built-in `Microsoft.AspNetCore.OpenApi` package
+(`AddOpenApi()` / `MapOpenApi()`) rather than Swashbuckle.AspNetCore. The
+document is served at `/openapi/v1.json` in Development only.
+
+**Why:** It is the current Microsoft-recommended, in-box approach for .NET 9+
+and needs no third-party dependency. The specification names "Swagger/OpenAPI"
+generically (spec §5.2, §7) without mandating Swashbuckle specifically.
+
+**Alternatives considered:** Swashbuckle.AspNetCore — gives a browsable
+Swagger UI page out of the box; the built-in package does not by itself. If a
+UI is wanted later, add Swashbuckle (or a lightweight viewer such as Scalar)
+pointed at the generated document; this does not need a new architectural
+decision, just a package add.
+
+**Consequence:** Nothing is exposed outside Development. No Swagger UI exists
+yet — only the raw JSON document — until/unless a UI package is added.

@@ -7,7 +7,7 @@ Permanent source of truth for what Raqam is and how it is built.
 supplied by the user). If this file and the specification disagree, the
 specification wins and this file must be corrected.
 
-**Repository state (updated 2026-11-10, session 2):** Phase 0 skeleton only.
+**Repository state (updated 2026-11-10, session 3):** Phase 0 skeleton only, user-confirmed working and pushed to GitHub.
 The solution, four empty projects, and a placeholder frontend exist; no product
 feature is implemented. "Architecture" and "Technology stack" describe the plan
 per the specification except where marked *present*.
@@ -228,7 +228,7 @@ A unit of work is done only when all applicable items hold:
 Status of these commands (session 2): `dotnet build`, `npm run build`
 (`tsc -b && vite build`), and `npm run lint` (`oxlint`) exist and ran clean in
 the AI's Linux workspace. `dotnet test` has nothing to run until the first test
-project is added in M1. None has been run on the developer's Mac yet.
+project is added in M1. The user confirmed the skeleton works on the Mac (session 3).
 
 ## Manual Action Rule
 

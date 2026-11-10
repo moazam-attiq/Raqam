@@ -13,8 +13,8 @@ Render / Neon / Vercel.
 **State as of 2026-11-10 (session 2):** Phase 0 skeleton. `backend/Raqam.sln`
 with four projects, `frontend/raqam-web` (Vite + React + TypeScript + Tailwind),
 `.gitignore`, `.env.example`, and `README.md` exist. No product feature exists.
-The skeleton was built and started in the AI's Linux workspace, not yet on the
-developer's Mac. Git is not known to be initialized; nothing has been committed.
+M0 is complete: the user confirmed the skeleton works on the Mac and is pushed
+to GitHub (session 3). M1 is active and not yet started in code.
 
 ## How to determine current state
 

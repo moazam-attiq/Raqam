@@ -3,6 +3,55 @@
 Reverse chronological. Record what actually happened; never rewrite earlier
 entries.
 
+## 2026-11-10 — Session 3: M0 closed, M1 opened
+
+**Context:** The user reported that everything was good on the Mac and that
+the project is pushed to GitHub.
+
+**What changed:**
+
+- M0 marked `[x]`; M1 marked `[~]`. `TASKS.md` replaced with the M1 checklist.
+- B002 and B003 moved to Resolved.
+- No application code changed.
+
+**M0 task summary (archived from `TASKS.md`):** folder inspected; nothing to
+migrate from `ExpenseTracker`; solution with four projects and references;
+Vite + React + TypeScript + Tailwind frontend; `.gitignore`, `.env.example`,
+README; build, API start, frontend build/lint/start verified in the AI
+workspace; Mac verification and Git push confirmed by the user.
+
+**Verification:**
+
+- User-confirmed: the M0 checks pass on the Mac; repository pushed to GitHub.
+- Verified by the AI: a `.git` directory exists in the project folder.
+- Not seen by the AI: command output, tool versions, the commit history, the
+  remote URL.
+
+**Later in the same session (M1 started):**
+
+- User ran on the Mac (output shown to the AI): added
+  `Npgsql.EntityFrameworkCore.PostgreSQL` 10.0.3 to Infrastructure and
+  `Microsoft.EntityFrameworkCore.Design` 10.0.14 to Api, no warnings. The
+  output shows .NET SDK 10.0.402 and PostgreSQL 17.10.
+- User created the local role and database `raqam_dev` and showed a successful
+  connection as `raqam_dev`. The local admin user is `postgres`
+  (password-authenticated).
+- AI wrote, unbuilt: `Infrastructure/Persistence/RaqamDbContext.cs`,
+  `Infrastructure/DependencyInjection.cs` (`AddInfrastructure`),
+  `Api/HealthChecks/DatabaseHealthCheck.cs`, and a new `Api/Program.cs` mapping
+  `/health`. These could not be compiled in the AI workspace (B004).
+
+- User set the connection string with user-secrets, built, ran the API, and
+  showed `curl -i http://localhost:5196/health` returning `200 OK` with body
+  `Healthy`. This verifies the AI-written code compiles and reaches the
+  database on the Mac. The build output itself was not shown.
+
+**Not done:** confirmation that `PingController` was deleted; initial
+migration; exception handling; validation; OpenAPI; logging; test project.
+
+**Next:** install `dotnet-ef` as a local tool, create and apply the initial
+migration.
+
 ## 2026-11-10 — Session 2: Phase 0 skeleton scaffolded
 
 **Context:** The user confirmed there is nothing to migrate from any earlier
@@ -82,3 +131,29 @@ run on the user's machine.
 **Next:** continue M0 at `TASKS.md` Part 1 — confirm the folder state with
 `pwd` / `ls -la`, resolve B001 (`ExpenseTracker`) and B002 (tool versions)
 with the user, then scaffold.
+
+
+## 2026-11-10 — Session 3 (continued): exception handling and OpenAPI written
+
+**Context:** Continuing M1 Part 2 after the initial migration was applied and
+verified.
+
+**What changed:**
+
+- AI wrote, unbuilt: `Api/ErrorHandling/GlobalExceptionHandler.cs`
+  (`IExceptionHandler` implementation returning ProblemDetails; includes the
+  exception detail only when `IHostEnvironment.IsDevelopment()`).
+- `Api/Program.cs` updated to register `AddExceptionHandler<GlobalExceptionHandler>()`,
+  `AddProblemDetails()`, `UseExceptionHandler()`, and `AddOpenApi()` /
+  `MapOpenApi()` (Development only). D012 records the OpenAPI package choice.
+- None of this has been built on the Mac yet; `Microsoft.AspNetCore.OpenApi`
+  is not yet added as a package reference.
+
+**Verification:** Not yet attempted. Not implemented, tested, or user-confirmed.
+
+**Not done:** adding the `Microsoft.AspNetCore.OpenApi` package; building;
+checking `/openapi/v1.json`; triggering an exception to confirm the
+ProblemDetails shape; request validation; logging; test project.
+
+**Next:** user adds the OpenAPI package, builds, and checks the new
+endpoints.

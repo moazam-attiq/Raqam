@@ -37,7 +37,7 @@ anything non-trivial.
 
 ## Known bugs
 
-None known. Only skeleton code exists.
+None known as of M3 closing (2026-11-11).
 
 ## Resolved
 

@@ -3,6 +3,403 @@
 Reverse chronological. Record what actually happened; never rewrite earlier
 entries.
 
+## 2026-11-11 — Session 6 (continued): M3 closed
+
+**Verification (user-run, output shared):** `dotnet test` on `Raqam.Api.Tests`: 55
+passed, 0 failed ("Test Run Successful"); with the earlier 139-test run (117 passed
++ 22 rate-limit failures, now fixed) that puts `Raqam.Domain.Tests` at 84 passing.
+`/openapi/v1.json` lists every M3 endpoint (accounts incl. `/transactions` and
+`/balance`, categories, transactions) alongside auth and 2FA. Earlier in the session:
+`scripts/m3-smoke.sh` 56 passed, 0 failed over HTTPS; migration applied to dev and to
+an empty scratch database.
+
+**What was written:** Part 6 ticked with test names against each exit criterion;
+Part 4 OpenAPI item and Part 3 multi-record item ticked (the only multi-record change
+is the parent-category archive, one `SaveChangesAsync`); README (status, test
+projects, HTTPS profile, accounts / categories / transactions section with a curl
+walkthrough and rules); `docs/architecture.md` (all four projects, M3 cross-cutting
+pieces); `CONTEXT.md` state refreshed (it still described session 2); `BLOCKERS.md`
+known bugs line; `ROADMAP.md` M3 `[x]` with evidence and current-milestone text.
+
+**Not done / caveats:** the README curl walkthrough is written from the contracts and
+the verified smoke script but was not run line by line. The `dotnet test` counts for
+the Domain project are derived, not read from output. The M4 checklist is not drafted;
+M4 is not opened. Optional: `DROP DATABASE raqam_scratch;` as `postgres` (not reported
+back).
+
+**Next:** discuss M4 (core frontend) decisions with the user, record them, then replace
+`TASKS.md` with the M4 checklist.
+
+## 2026-11-11 — Session 6 (continued): Part 5 tests green
+
+**What happened:** user created `Raqam.Domain.Tests` and ran `dotnet test`: 117 passed,
+22 failed. Every failure was `429 Too Many Requests` in `InitializeAsync`: xUnit creates
+a new class instance per test, so each test signed in again and passed the login limit
+(5 a minute, D019). My earlier assumption that `InitializeAsync` ran once per class was
+wrong. Fix: `Program.cs` reads `RateLimiting:LoginPermitLimit` (default 5, so production
+is unchanged); `ApiFactory` (in `TestApiClient.cs`) sets it to 100000 and is the fixture
+for `OwnershipTests`, `BalanceTests`, `RulesAndConcurrencyTests` and
+`DatabaseConstraintTests`; `RateLimitingTests` still uses the default factory. All six
+files pushed and verified with `cmp`.
+
+**Verification:** user re-ran `dotnet test` and reported "success" (green; counts not
+shared). Part 5 ticked on that basis, and the Part 3 ownership item (covered by
+`OwnershipTests`).
+
+**Not done:** OpenAPI review (Part 4); Part 3 item on multi-record changes in one
+transaction (parent-category archive cascades to children; not yet confirmed);
+Part 6 walkthrough; Part 7 docs and closing M3.
+
+**Next:** Part 6 (map the exit criteria to the smoke test and tests by name, review
+`/openapi/v1.json`), then Part 7.
+
+## 2026-11-11 — Session 6 (continued): Part 5 tests written (unbuilt)
+
+**What was written:**
+- `Raqam.Domain.Tests` (new project, files only): `MoneyRulesTests`, `AccountTests`,
+  `CategoryTests`, `TransactionTests`. Every transaction rule has a passing and a failing
+  case: the three shapes, matching category type, destination rules, same-account
+  transfer, amount (zero, negative, 3 decimals, beyond `numeric(18,2)`, boundaries),
+  same-owner "not found" messages, archived references (new vs already attached), update
+  incl. type change and a failed update leaving the entity unchanged, text limits, and
+  `SignedEffectOn` for income, expense and both ends of a transfer.
+- `Raqam.Api.Tests`: `TestApiClient` (throwaway signed-in user with cookie and CSRF
+  token, typed helpers, cleanup in FK-safe order, `SqlStateAsync`); `OwnershipTests`
+  (Alice and Bob: 404 for every operation on accounts, categories and transactions,
+  cross-user references in transactions rejected, lists and filters never leak, a
+  payload `userId` is ignored and the stored owner is the caller);
+  `BalanceTests` (SQL balance equals `Σ SignedEffectOn` for 3 accounts across 12
+  transactions at 6 `asOf` dates incl. components and the transfers-net-to-zero
+  invariant; ledger totals exclude transfers; edit/type-change/move/delete update the
+  balance; archived account keeps history); `RulesAndConcurrencyTests` (401 when
+  anonymous, stale-version 409 for accounts, transactions and categories, duplicate
+  names 409, invalid amounts and 11 rule violations 400, 404 for missing references,
+  subcategory rules and archive cascade, literal `%` and `_` search, parent-category
+  filter includes children, type/date/sort/paging, invalid list queries 400);
+  `DatabaseConstraintTests` (check constraints for amount, type and shape; same-owner
+  foreign keys for account, category and parent; Restrict on delete; unique names for
+  accounts and categories incl. NULLS NOT DISTINCT; `xmin` changes on update).
+
+**Verification:** none yet; the AI workspace cannot compile or run tests.
+
+**Not done:** creating the `Raqam.Domain.Tests` project and building; the run; OpenAPI
+review; Part 6 (exit-criteria walkthrough) and Part 7 (docs).
+
+**Next:** user creates the project (commands in TASKS Part 5), runs `dotnet build` and
+`dotnet test`, shares output; fix any failures; tick Part 5.
+
+## 2026-11-11 — Session 6 (continued): smoke test 56/56; Part 4 verified
+
+**What changed:** after restarting the API with the explicit `ILIKE` escape, the user
+re-ran `scripts/m3-smoke.sh`: **56 passed, 0 failed** (reported as a count; the full
+output was not shared). That includes the literal-`%` search, description and
+merchant search, and the categories section (create, duplicate 409, subcategory
+rules, stale-version 409, archive cascade). Part 4 controller items and the
+`api/v1` / CSRF / 409 item are ticked. The exact cause of the earlier empty `%` search
+was never isolated; the explicit escape character fixed it.
+
+**Not done:** OpenAPI document review; Part 5 tests (domain unit tests, DB
+constraint tests, cross-user ownership, SQL balance vs `SignedEffectOn`, ledger
+totals excluding transfers); Part 6/7.
+
+**Next:** Part 5.
+
+## 2026-11-11 — Session 6 (continued): first smoke run 43/44; search escape fixed
+
+**What happened:** the user ran `scripts/m3-smoke.sh` against the running API:
+**43 passed, 1 failed**. Passing: login and CSRF flow, 401 when anonymous, account
+create / duplicate 409 / validation 400, stale-version 409 on accounts and
+transactions, income / expense / transfer creation, every rule rejection, 404 for
+unknown ids, balances (Cash 1149.50, Bank 6700, `asOf` 849.50 and 7000, and after
+edit and delete 1100 and 1300), history, type / date / account filters, sort,
+paging, bad page size and date range, archive behaviour.
+
+**Failure:** `search=%` (a literal percent sign, scoped to the Cash account) returned
+0 rows; the expense has the merchant "Cafe 50%", so 1 was expected. Cause not
+confirmed. Likely suspect: the implicit `ILIKE` escape. Change: `TransactionRepository`
+now passes the escape character explicitly (`ILike(..., pattern, "\\")`, i.e.
+`ESCAPE '\'`). The script also got two checks that tell the cases apart
+(`search=lunch` for description, `search=CAFE` for merchant and case-insensitivity),
+and a categories section: create, duplicate 409, subcategory under a parent, wrong
+type 400, a third level 400, stale-version 409, and archive cascade.
+
+**Verification:** the 43 passes are user output. The fix and the new checks are
+pushed, **not run**.
+
+**Not done:** the re-run; OpenAPI review; Part 5 tests.
+
+**Next:** user restarts the API and re-runs the script; if the `%` check still fails
+the new description / merchant lines show whether search itself or the escape is at
+fault.
+
+## 2026-11-11 — Session 6 (continued): controllers build; smoke script written
+
+**What changed:** the user reported the build with the three controllers as
+successful (no output shared). Wrote `scripts/m3-smoke.sh`: it logs in as the seeded
+user over HTTPS (the cookies are `Secure`, so `https://localhost:7271` with
+`curl -k`), fetches the CSRF token again after login, then checks ~50 things:
+401 when anonymous; seeded categories; create/duplicate/validation on accounts;
+409 on a stale account and transaction version; income, expense and transfer
+creation; the type rules (zero and 3-decimal amounts, wrong category type,
+transfer to the same account, transfer with a category, unknown account/transaction
+-> 400/404); balances including `asOf`; account history, filters, a literal-`%`
+search, sort and paging; edit, delete and the balance following them; archive.
+It leaves two archived accounts in the dev database per run (accounts are never
+deleted, D029).
+
+**Verification:** syntax-checked with `bash -n` only; **not run**. Part 4 items stay
+unticked until the user runs it and shares the output.
+
+**Not done:** the smoke run; OpenAPI review; cross-user (404) check, which needs a
+second user and belongs in the Part 5 tests; totals-excluding-transfers check
+(no endpoint yet, M5), also Part 5.
+
+**Next:** user starts the API with `--launch-profile https` and runs the script;
+then Part 5 tests.
+
+## 2026-11-11 — Session 6 (continued): slice 2 built; Part 4 controllers written
+
+**What changed:** the user reported `dotnet build` and `dotnet test` as "success"
+for slice 2 (no counts shared), so Part 3 compiles and is wired. Ticked the
+Part 3 items that are about code existing (contracts, validators, use cases,
+balance, totals); the ownership and rule behaviour still needs Part 5 tests.
+The fresh-database migration check was also finished (see below).
+
+Wrote Part 4: `AccountsController` (list, create, get, update, archive,
+`/transactions` history, `/balance?asOf=`), `CategoriesController` (list with
+`includeArchived` and `type`, create, get, update, archive) and
+`TransactionsController` (list with filters, create, get, update, delete), all
+under `api/v1`, thin wrappers over the services. Auth comes from the existing
+fallback policy and CSRF from the global filter.
+
+**Verification:** Part 3 build user-reported. Controllers are pushed but
+**unbuilt**; no HTTP call has been made yet.
+
+**Not done:** build of the controllers; OpenAPI review; tests (Part 5); curl
+walkthrough (Part 6).
+
+**Next:** user builds, then runs a first curl smoke test (login, CSRF token,
+create account, create transaction, balance); then Part 5 tests.
+
+## 2026-11-11 — Session 6 (continued): slice 1 built; Part 3 slice 2 written
+
+**What changed:** the user reported the `dotnet add` FluentValidation, build and
+test commands as successful (no counts shared), so slice 1 is built. The
+fresh-scratch-database migration check failed for environment reasons, not code:
+`raqam_dev` cannot create databases (`permission denied to create database`), and
+the connection string used the literal placeholder `<your dev password>`
+(`28P01`). Re-run with the admin role `postgres` creating the database
+`OWNER raqam_dev`: `dotnet ef database update` then applied `InitialCreate`,
+`AddIdentity` and `AddCoreFinancialDomain` to the empty database and printed
+`Done.` (user output; the one `fail` line is EF's expected first query for the
+not-yet-existing `__EFMigrationsHistory` table). Rule 16 is therefore met. The
+`\dt` listing and the drop were not reported back.
+
+Wrote slice 2: transaction contracts, validators (new `PositiveAmount` rule),
+`ITransactionRepository`, `TransactionService` (list with filters, sort and
+paging; account history; get; create; update with version; hard delete),
+`LedgerService` (account balance with optional `asOf`; income/expense totals
+excluding transfers), and `TransactionRepository` (owner-scoped; balance and
+totals are one aggregate query each). Registered in `Program.cs` and
+`DependencyInjection.cs`. Recorded D036.
+
+**Verification:** slice 1 user-confirmed. Slice 2 is pushed but **unbuilt**; the AI
+workspace cannot compile.
+
+**Not done:** build of slice 2; controllers (Part 4); tests (Part 5), including
+the check that the SQL balance agrees with `Transaction.SignedEffectOn`.
+
+**Next:** user runs `dotnet build Raqam.sln` and `dotnet test`; then Part 4
+controllers.
+
+## 2026-11-11 — Session 6 (continued): Part 2 verified; Part 3 slice 1 written
+
+**What changed:** the user re-ran the build and `dotnet test` (7/7 passing,
+user-reported) and the `psql` check: 10 Expense and 5 Income categories, and
+`SELECT xmin FROM "Accounts"` ran without error (0 rows, no accounts yet). Part 2
+is therefore verified, except the fresh-database migration check (rule 16),
+which stays open. Recorded D033 (composite-key same-owner enforcement), D034
+(advisory lock for seeding), D035 (Application layer structure).
+
+Started Part 3 with accounts and categories: `NotFoundException`,
+`ConflictException`, `IUnitOfWork`, `MoneyValidation`; per feature the request
+and response records, FluentValidation validators, a repository interface and a
+service; Infrastructure repositories and `UnitOfWork` (translates concurrency
+and unique-index failures to 409); registration in `Program.cs` and
+`DependencyInjection.cs`; string enums in JSON; 404 and 409 mapping in
+`GlobalExceptionHandler`.
+
+**Verification:** Part 2 items are user-confirmed via shared output. Part 3
+files are pushed but **unbuilt**; the AI workspace cannot compile.
+
+**Not done:** adding the `FluentValidation` package to `Raqam.Application`
+(user command); building; transaction use cases, balance, ledger totals;
+controllers (Part 4); tests (Part 5).
+
+**Next:** user adds the package and builds; then Part 3 slice 2 (transactions).
+
+## 2026-11-11 — Session 6 (continued): first test run found a seeder race; fixed
+
+**What happened:** the user applied the migration (the seeder queried the new
+tables without error, so it applied) and ran `dotnet test`: 4 of 7 passed, 3
+(`CsrfTests`, `TwoFactorTests`, `AuthorizationTests`) failed at host startup with
+`40P01: deadlock detected` inside `DatabaseSeeder.SeedDefaultCategoriesAsync`.
+Cause: xUnit starts several `WebApplicationFactory` hosts in parallel, each runs
+the seeder, and they all inserted the default categories at once. The earlier
+`catch (DbUpdateException)` did not help because the non-retrying Npgsql
+execution strategy wraps the failure in an `InvalidOperationException`. This was
+the race the AI had anticipated but guarded against too narrowly.
+
+**Fix:** category seeding now takes a PostgreSQL advisory lock
+(`pg_advisory_lock`) on a connection held open for the check-then-insert, and
+releases it afterwards, so only one host seeds and the rest see the categories.
+The catch block was removed. Pushed and read back identical (first push did not
+land; second did).
+
+**Verification:** the failure and the 4 passing tests are from the user's shared
+test output. The fix is not yet built or tested.
+
+**Next:** user rebuilds and re-runs `dotnet test` and the `psql` category check;
+then D033 and Part 3.
+
+## 2026-11-11 — Session 6 (continued): migration created and reviewed; seeder written
+
+**What changed:** the user built and ran `dotnet ef migrations add
+AddCoreFinancialDomain` (reported success; output not shared). The AI read the
+generated migration: tables Accounts, Categories, Transactions with the planned
+check constraints, `(UserId, Id)` unique keys, composite foreign keys (all
+`Restrict`), unique name indexes, and the owner-scoped indexes. Nothing
+unexpected; `xmin` is the row-version marker only. Default category list
+confirmed (spec §3.4 examples; the user said "you decide"). `DatabaseSeeder`
+now also creates default categories for the configured seed user when that user
+has none (D021); it is restricted to that one user so test throwaway users never
+get categories (their deletion would fail on the `Restrict` foreign keys).
+
+**Mistake and correction:** the first push of `DatabaseSeeder.cs` left the Mac
+with a half-edited copy (it called `SeedDefaultCategoriesAsync`, which was not in
+the file) — a different silent-push failure from the usual "old content stays".
+Found by comparing byte counts and content on read-back, re-pushed, and
+verified identical. Never built in that state.
+
+**Verification:** migration file read and reviewed by the AI; seeder verified
+identical on the Mac after the re-push. **Not built** (seeder), **not applied**
+(migration), no tests run.
+
+**Not done:** apply the migration to `raqam_dev`; confirm `xmin` works and no
+extra column exists; build and start the API to see the seeder create
+categories; apply to a fresh database (rule 16); record the composite-key
+decision (D033); Parts 3–7.
+
+**Next:** user runs the apply and build commands in the session reply and shares
+output; then Part 3 (Application layer).
+
+## 2026-11-11 — Session 6 (continued): Part 1 built; Part 2 EF configuration written
+
+**What changed:** the user ran `dotnet build` and reported success, so the Part 1
+domain code compiles (build output itself not shared). Part 1 checkboxes ticked.
+Started Part 2: `AccountConfiguration`, `CategoryConfiguration`,
+`TransactionConfiguration` (tables, string enums, `numeric(18,2)`, `xmin`
+concurrency via `IsRowVersion()`, check constraints for positive amounts, valid
+types, and transfer/non-transfer shape; unique account name per owner; unique
+category name per owner + parent + type with NULLS NOT DISTINCT; `(UserId,
+TransactionDate)` index; all foreign keys `Restrict`) and three `DbSet`s on
+`RaqamDbContext`. Same-owner enforcement is a database rule: composite
+`(UserId, Id)` alternate keys on Accounts and Categories, referenced by
+composite foreign keys from Transactions and from subcategory to parent.
+
+**Verification:** the Part 1 build is user-confirmed. The Part 2 files are
+unbuilt and have no migration; the AI cannot compile or run EF here.
+
+**Not done:** build of Part 2; migration `AddCoreFinancialDomain` (created and
+reviewed before applying); seeder (waiting on the default category list);
+everything in Parts 3–7. Test cleanup note for Part 5: foreign keys to the user
+are `Restrict`, so tests that create a throwaway user and data must delete the
+data before the user.
+
+**Next:** user builds, creates the migration, shares the output; the AI reviews
+the generated migration (no stray `Version` column, constraints present) before
+it is applied.
+
+## 2026-11-11 — Session 6 (continued): M3 Part 1 domain code written, unbuilt
+
+**What changed:** wrote the domain layer in `Raqam.Domain`: `Common/`
+(`DomainException`, `MoneyRules`, `Guard`), `Accounts/` (`Account`,
+`AccountType`), `Categories/` (`Category`, `CategoryType`), `Transactions/`
+(`Transaction`, `TransactionType`). Rules enforced in the entities: positive
+amounts with at most 2 decimals (D030); income/expense need a category of the
+matching type; transfers need a distinct destination and no category; owner
+checks on every referenced account and category (cross-user ids give the same
+"not found" message as a missing one); newly referenced archived accounts or
+categories are rejected (D024); one-level subcategories of the same type
+(D028). `GlobalExceptionHandler` now maps `DomainException` to a 400
+ProblemDetails. The choices that go beyond the spec are listed in `TASKS.md`
+Part 1.
+
+**Verification:** all ten files were pushed to the Mac and read back identical
+to what was written. **Not built, not tested**: the AI workspace has no .NET SDK
+and cannot reach the installer, so the code has never been compiled.
+
+**Not done:** `dotnet build` on the Mac; Part 1 checkboxes stay unchecked until
+it passes; domain unit tests (Part 5); everything in Parts 2–7.
+
+**Next:** user runs `dotnet build backend/Raqam.sln` and shares the output; fix
+any compile errors; then Part 2 (EF configuration, migration, seeder).
+
+## 2026-11-11 — Session 6 (continued): remaining M3 Part 0 defaults confirmed
+
+**What changed:** the user confirmed all eight proposed defaults unchanged.
+Recorded as D025 (repository-style persistence interfaces), D026 (explicit
+owner filters, 404 for others' resources), D027 (`xmin` concurrency, 409 on
+stale `PUT`), D028 (one-level subcategories), D029 (transactions hard-deleted;
+accounts/categories archived only), D030 (reject extra decimals), D031
+(editable opening balance, PKR fixed), D032 (`asOf` balance). `TASKS.md` Part 0
+is fully checked; `ROADMAP.md` current-milestone note updated.
+
+**Verification:** documentation only; no code, build, or test.
+
+**Next:** start `TASKS.md` Part 1 (domain entities and rules), then Part 2
+(EF configuration and migration), with the user running `dotnet` commands.
+
+## 2026-11-11 — Session 6: M3 opened; Part 0 decisions made, checklist written
+
+**Context:** M2 closed at the end of session 5 with one verification item
+(cross-user-id ownership test) carried forward because no owner-scoped entity
+existed yet. This session opened M3.
+
+**What changed:**
+
+- Read `ROADMAP.md`, `PROGRESS.md`, `TASKS.md`, `DECISIONS.md`, `BLOCKERS.md`,
+  `CONTEXT.md`, `docs/architecture.md`, and spec §3.2–§3.4, §4, §6.2–§6.4,
+  §7.3–§7.5, §8.2, §10, §11 Phase 3, §16.
+- Discussed four open M3 decisions with the user; all four were answered with
+  the recommended option and recorded: D021 (default categories are per-user
+  owned rows), D022 (transaction date is a plain date), D023 (transfers are one
+  row created through `/transactions`), D024 (negative balances allowed;
+  archived accounts/categories reject new activity).
+- `TASKS.md` replaced with the M3 checklist (Parts 0–7), including the
+  carried-over ownership test. Eight further defaults (persistence access
+  pattern, owner-scoping style, `xmin` concurrency, one-level subcategories,
+  hard-delete of transactions, decimal-place handling, editable opening balance,
+  `asOf` on balance) are listed as **proposed, not yet confirmed**, and are not
+  recorded as decisions.
+- `ROADMAP.md`: M3 marked `[~]`; "Current milestone" note updated.
+
+**Verification:**
+
+- Nothing in the application changed; no build or test was run. The AI had no
+  shell on the Mac this session, so `git status` / `git log` were not checked
+  and the repository was not compared with what `.ai/` describes beyond the
+  files read.
+- Not verified: that the pushed `.ai/` files landed on disk (to be re-staged
+  and read back after the push).
+
+**Not done:** confirmation of the proposed defaults; any M3 code.
+
+**Next:** the user confirms or changes the proposed defaults in `TASKS.md`
+Part 0; record them as D025+; then start Part 1 (domain entities and rules)
+and Part 2 (EF configuration and migration), with the user running `dotnet`
+commands.
+
 ## 2026-11-11 — Session 5: Identity auth verified; owner-scoping, CSRF, rate limiting, and TOTP 2FA built
 
 **Context:** Continuing M2. Previous session left `AuthController`

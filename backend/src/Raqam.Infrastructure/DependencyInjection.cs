@@ -4,8 +4,13 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Raqam.Application.Accounts;
+using Raqam.Application.Categories;
+using Raqam.Application.Common;
+using Raqam.Application.Transactions;
 using Raqam.Infrastructure.Identity;
 using Raqam.Infrastructure.Persistence;
+using Raqam.Infrastructure.Persistence.Repositories;
 
 namespace Raqam.Infrastructure;
 
@@ -17,6 +22,13 @@ public static class DependencyInjection
             ?? throw new InvalidOperationException("Connection string 'ConnectionStrings:Default' is not configured.");
 
         services.AddDbContext<RaqamDbContext>(options => options.UseNpgsql(connectionString));
+
+        // Persistence behind the interfaces the Application layer defines (D025). Scoped, so
+        // they all share the request's one DbContext and one save is one transaction.
+        services.AddScoped<IAccountRepository, AccountRepository>();
+        services.AddScoped<ICategoryRepository, CategoryRepository>();
+        services.AddScoped<ITransactionRepository, TransactionRepository>();
+        services.AddScoped<IUnitOfWork, UnitOfWork>();
 
         // AddIdentity (rather than the lighter AddIdentityCore) sets up the cookie
         // authentication schemes Identity's own sign-in and two-factor flows expect

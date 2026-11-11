@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
 using FluentValidation;
 using Microsoft.AspNetCore.Authorization;
@@ -6,6 +7,10 @@ using Raqam.Api.HealthChecks;
 using Raqam.Api.Services;
 using Raqam.Api.Startup;
 using Raqam.Api.Validation;
+using Raqam.Application.Accounts;
+using Raqam.Application.Categories;
+using Raqam.Application.Ledger;
+using Raqam.Application.Transactions;
 using Raqam.Application.Common;
 using Raqam.Infrastructure;
 
@@ -41,11 +46,23 @@ builder.Services
         // DI registrations (AddControllersWithViews), which this API-only project doesn't
         // have, and throws at request time without them. See CsrfFilter for details.
         options.Filters.Add<CsrfFilter>();
-    });
+    })
+    // Enums travel as their names ("Expense", "BankAccount"), not numbers: readable in the
+    // API, stable if the enum is ever reordered, and a left-out value cannot pass as 0.
+    .AddJsonOptions(options => options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 
-// Scans this assembly for FluentValidation validators. There are none yet (no DTOs exist
-// before Phase 3), but the wiring is ready for when controllers gain request models.
+// Request validators live next to their request records in Raqam.Application (D013's
+// consequence), plus any in this assembly (the auth requests).
 builder.Services.AddValidatorsFromAssemblyContaining<Program>();
+builder.Services.AddValidatorsFromAssemblyContaining<AccountService>();
+
+// Use cases (D025): plain scoped classes, one per feature area. They depend on the
+// repository interfaces that AddInfrastructure binds, and on ICurrentUser below.
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddScoped<AccountService>();
+builder.Services.AddScoped<CategoryService>();
+builder.Services.AddScoped<TransactionService>();
+builder.Services.AddScoped<LedgerService>();
 
 // Everything requires authentication unless explicitly marked [AllowAnonymous] or
 // .AllowAnonymous() (business rule 4: every financial endpoint is owner-scoped, and an
@@ -96,7 +113,11 @@ builder.Services.AddRateLimiter(options =>
         partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
         factory: _ => new FixedWindowRateLimiterOptions
         {
-            PermitLimit = 5,
+            // 5 per minute unless configured otherwise. The override exists only so the
+            // integration tests, which sign in a fresh user per test, can raise it; the
+            // rate-limit test itself runs against the default.
+            PermitLimit = httpContext.RequestServices.GetRequiredService<IConfiguration>()
+                .GetValue("RateLimiting:LoginPermitLimit", 5),
             Window = TimeSpan.FromMinutes(1),
             QueueLimit = 0,
         }));

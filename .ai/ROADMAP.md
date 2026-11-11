@@ -95,7 +95,7 @@ first owned entity). That single item is carried forward as an M3 task
 rather than treated as outstanding M2 work. README documentation (login,
 CSRF, 2FA) added.
 
-## [ ] M3 — Core financial domain and database
+## [x] M3 — Core financial domain and database
 
 **Objective:** a correct ledger.
 
@@ -106,6 +106,14 @@ and migrations; domain and integration tests.
 **Verification:** accounts and categories can be managed; income, expenses, and
 transfers work; balances reconcile; transfers are excluded from income/expense
 totals.
+
+**Completed 2026-11-11 (session 6).** Evidence (user-run, output shared):
+`scripts/m3-smoke.sh` 56 passed, 0 failed over HTTPS; `dotnet test` green
+(`Raqam.Api.Tests` 55 passed; the earlier 139-test run implies 84 in
+`Raqam.Domain.Tests`, all passing); migration applied to the dev database and to
+an empty scratch database; OpenAPI document lists every M3 endpoint. The M2
+carry-over (cross-user ownership test) is covered by `OwnershipTests`. Details in
+`PROGRESS.md`.
 
 ## [ ] M4 — Core frontend
 
@@ -205,7 +213,7 @@ Action Rule.
 
 ## Current milestone
 
-**M3 — Core financial domain and database** (not yet started). `TASKS.md`
-still holds the M2 checklist (M2 is closed above) — replace it with the M3
-checklist, including the carried-forward ownership test, before starting M3
-work.
+**M3 — Core financial domain and database** is complete (closed 2026-11-11,
+session 6). **M4 — Core frontend** is next and is not opened yet: its open
+decisions are discussed with the user first, then `TASKS.md` is replaced with the
+M4 checklist.

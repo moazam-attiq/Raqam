@@ -152,6 +152,199 @@ namespace Raqam.Infrastructure.Persistence.Migrations
                     b.ToTable("AspNetUserTokens", (string)null);
                 });
 
+            modelBuilder.Entity("Raqam.Domain.Accounts.Account", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AccountType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CurrencyCode")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("character varying(3)");
+
+                    b.Property<string>("InstitutionName")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<bool>("IsArchived")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<decimal>("OpeningBalance")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "Name")
+                        .IsUnique();
+
+                    b.ToTable("Accounts", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_Accounts_AccountType_Valid", "\"AccountType\" IN ('Cash', 'BankAccount', 'DigitalWallet', 'SavingsAccount')");
+
+                            t.HasCheckConstraint("CK_Accounts_Name_NotBlank", "length(btrim(\"Name\")) > 0");
+                        });
+                });
+
+            modelBuilder.Entity("Raqam.Domain.Categories.Category", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Colour")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Icon")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<bool>("IsArchived")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<Guid?>("ParentCategoryId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "ParentCategoryId", "Type", "Name")
+                        .IsUnique();
+
+                    NpgsqlIndexBuilderExtensions.AreNullsDistinct(b.HasIndex("UserId", "ParentCategoryId", "Type", "Name"), false);
+
+                    b.ToTable("Categories", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_Categories_Name_NotBlank", "length(btrim(\"Name\")) > 0");
+
+                            t.HasCheckConstraint("CK_Categories_NotOwnParent", "\"ParentCategoryId\" IS NULL OR \"ParentCategoryId\" <> \"Id\"");
+
+                            t.HasCheckConstraint("CK_Categories_Type_Valid", "\"Type\" IN ('Income', 'Expense')");
+                        });
+                });
+
+            modelBuilder.Entity("Raqam.Domain.Transactions.Transaction", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<Guid?>("CategoryId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<Guid?>("DestinationAccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Merchant")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<Guid>("SourceAccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly>("TransactionDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "CategoryId");
+
+                    b.HasIndex("UserId", "DestinationAccountId");
+
+                    b.HasIndex("UserId", "SourceAccountId");
+
+                    b.HasIndex("UserId", "TransactionDate");
+
+                    b.ToTable("Transactions", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_Transactions_Amount_Positive", "\"Amount\" > 0");
+
+                            t.HasCheckConstraint("CK_Transactions_Shape", "(\"Type\" = 'Transfer' AND \"DestinationAccountId\" IS NOT NULL AND \"CategoryId\" IS NULL AND \"DestinationAccountId\" <> \"SourceAccountId\") OR (\"Type\" <> 'Transfer' AND \"DestinationAccountId\" IS NULL AND \"CategoryId\" IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_Transactions_Type_Valid", "\"Type\" IN ('Income', 'Expense', 'Transfer')");
+                        });
+                });
+
             modelBuilder.Entity("Raqam.Infrastructure.Identity.ApplicationUser", b =>
                 {
                     b.Property<Guid>("Id")
@@ -265,6 +458,58 @@ namespace Raqam.Infrastructure.Persistence.Migrations
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Raqam.Domain.Accounts.Account", b =>
+                {
+                    b.HasOne("Raqam.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Raqam.Domain.Categories.Category", b =>
+                {
+                    b.HasOne("Raqam.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Raqam.Domain.Categories.Category", null)
+                        .WithMany()
+                        .HasForeignKey("UserId", "ParentCategoryId")
+                        .HasPrincipalKey("UserId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("Raqam.Domain.Transactions.Transaction", b =>
+                {
+                    b.HasOne("Raqam.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Raqam.Domain.Categories.Category", null)
+                        .WithMany()
+                        .HasForeignKey("UserId", "CategoryId")
+                        .HasPrincipalKey("UserId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Raqam.Domain.Accounts.Account", null)
+                        .WithMany()
+                        .HasForeignKey("UserId", "DestinationAccountId")
+                        .HasPrincipalKey("UserId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Raqam.Domain.Accounts.Account", null)
+                        .WithMany()
+                        .HasForeignKey("UserId", "SourceAccountId")
+                        .HasPrincipalKey("UserId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 #pragma warning restore 612, 618

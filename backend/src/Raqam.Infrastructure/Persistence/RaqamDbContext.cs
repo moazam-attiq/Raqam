@@ -1,6 +1,9 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+using Raqam.Domain.Accounts;
+using Raqam.Domain.Categories;
+using Raqam.Domain.Transactions;
 using Raqam.Infrastructure.Identity;
 
 namespace Raqam.Infrastructure.Persistence;
@@ -8,6 +11,10 @@ namespace Raqam.Infrastructure.Persistence;
 public class RaqamDbContext(DbContextOptions<RaqamDbContext> options)
     : IdentityDbContext<ApplicationUser, IdentityRole<Guid>, Guid>(options)
 {
+    public DbSet<Account> Accounts => Set<Account>();
+    public DbSet<Category> Categories => Set<Category>();
+    public DbSet<Transaction> Transactions => Set<Transaction>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);

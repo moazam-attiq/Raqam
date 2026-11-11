@@ -417,6 +417,12 @@ equally attractive brute-force target. Revisit the limit (5/minute) if it
 proves too tight for normal use once there's a real frontend driving retries
 after typos.
 
+**Amendment (M3, Part 5):** the permit limit is read from configuration key
+`RateLimiting:LoginPermitLimit`, default 5. The default is the behaviour in every real
+environment. Only the integration-test host (`ApiFactory`) raises it, because those
+tests sign in a fresh user per test; `RateLimitingTests` runs against the default and
+still proves the 6th attempt in a minute returns 429.
+
 ## 2026-11-11 — D020: TOTP 2FA via ASP.NET Core Identity's built-in mechanisms
 
 **Status:** Active. Source: session 5; completes D007's 2FA commitment.
@@ -455,3 +461,299 @@ Recovery codes are single-use and Identity consumes them automatically on
 redemption; the UI should prompt the user to regenerate and re-save them once
 the supply runs low (not yet built — no endpoint surfaces remaining-code
 count).
+
+## 2026-11-11 — D021: Default categories are per-user owned rows
+
+**Status:** Active. Source: session 6 (M3 Part 0); spec §3.4, §4 rule 4.
+
+**Decision:** The default category set (spec §3.4 examples) is created as
+ordinary owner-scoped `Categories` rows for the user, by the seeder, only when
+that user has no categories yet. There are no global/system rows and no
+nullable `UserId` on categories.
+
+**Why:** User chose this. Ownership stays uniform (every row has a `UserId`,
+every query is owner-scoped), and the user can rename or archive defaults like
+any other category.
+
+**Alternatives considered:** Global system rows with `UserId = null` — needs
+special-case ownership checks and cannot be customised per user; not chosen.
+
+**Consequence:** The seeder must be idempotent for categories (never
+re-create defaults the user archived or renamed). A future second user would
+need the same seeding step.
+
+## 2026-11-11 — D022: Transaction date is a plain date
+
+**Status:** Active. Source: session 6 (M3 Part 0); spec §3.2, §4 rule 8.
+
+**Decision:** `TransactionDate` is a date only (`DateOnly` in the domain,
+PostgreSQL `date`). There is no time-of-day field in M3. Ordering within a day
+falls back to `CreatedAtUtc`. Persisted audit timestamps stay UTC.
+
+**Why:** User chose this. A plain date cannot shift with timezone conversion
+(rule 8), and it is the simplest model for lists, filters, and CSV import.
+
+**Alternatives considered:** Date plus a nullable `TransactionTime` (the
+literal reading of "date and optional time" in spec §3.2) — adds a field every
+list, filter, and import must handle; can be added later with a migration if a
+real need appears.
+
+**Consequence:** Bank-statement times are not preserved in M3. Revisit in M6
+if CSV import needs them for duplicate detection.
+
+## 2026-11-11 — D023: Transfers are created through `/transactions`
+
+**Status:** Active. Source: session 6 (M3 Part 0); spec §7.3, §7.5.
+
+**Decision:** A transfer is one `Transactions` row with `Type = Transfer`, a
+source account, and a destination account, created/edited/deleted through the
+same `POST/PUT/DELETE /transactions` endpoints as income and expenses. There
+is no separate `/transfers` endpoint and no pair of linked rows.
+
+**Why:** User chose this. One create/edit/delete path and one set of domain
+rules; a single row cannot get out of sync with a "matching" row, so the
+source decrease and destination increase are always equal by construction.
+
+**Alternatives considered:** A dedicated `/transfers` endpoint reusing the
+same domain rules — cleaner request shapes but more controllers and DTOs.
+Two linked rows per transfer — rejected; the spec's data model (§6.2) uses
+one row.
+
+**Consequence:** The transaction request DTO is type-dependent (destination
+account required only for transfers; category required only for income and
+expense), enforced by both the validator and database check constraints.
+
+## 2026-11-11 — D024: Balances may go negative; archived accounts and categories reject new activity
+
+**Status:** Active. Source: session 6 (M3 Part 0); spec §3.3, §3.4, §4 rule 9.
+
+**Decision:** No overdraft check: an expense or transfer may take an account
+below zero. Archiving an account or category keeps all history and keeps it
+visible in reports, but new transactions cannot reference an archived account
+or category.
+
+**Why:** User chose this. A "no negative balance" rule makes editing or
+deleting an old transaction fail unpredictably, because it changes the running
+balance retroactively.
+
+**Alternatives considered:** Rejecting any operation that would take the
+source below zero — safer for cash accounts but brittle for edits/deletes.
+
+**Consequence:** Overspending is surfaced later through budgets/warnings (M5),
+not blocked in the ledger.
+
+## 2026-11-11 — D025: Application reaches persistence through narrow repository-style interfaces
+
+**Status:** Active. Source: session 6 (M3 Part 0), confirmed by the user; spec §5.4, D001.
+
+**Decision:** Application defines small persistence interfaces (repository-style); Infrastructure implements them over `RaqamDbContext`. Application takes no EF Core package reference.
+
+**Why:** Keeps the dependency direction in D001/spec §5.4 and lets Application logic be tested without a database.
+
+**Alternatives considered:** An `IRaqamDbContext` interface exposing `DbSet`s — less code, but adds an EF Core reference to Application and leaks `IQueryable` into use cases; not chosen.
+
+**Consequence:** Interfaces are added per aggregate as needed (accounts, categories, transactions, balance/totals queries), not as a generic repository.
+
+## 2026-11-11 — D026: Owner scoping by explicit `UserId` filters, not EF global query filters
+
+**Status:** Active. Source: session 6 (M3 Part 0), confirmed by the user; spec §4 rules 4–5, §8.2; D004.
+
+**Decision:** Every repository query filters on `UserId == currentUser.Id` (`ICurrentUser`, M2) explicitly. EF Core global query filters are not used. A resource owned by someone else returns 404, never 403.
+
+**Why:** The filter is visible at each call site and testable; global filters hide ownership logic, behave awkwardly in the seeder and tests (no current user), and are easy to bypass with `IgnoreQueryFilters`.
+
+**Alternatives considered:** EF global query filters keyed on `ICurrentUser` — fewer places to forget a filter, but implicit and harder to reason about; not chosen.
+
+**Consequence:** Each new repository method must take or resolve the owner id; cross-user tests (carried over from M2) cover every resource type.
+
+## 2026-11-11 — D027: Optimistic concurrency with PostgreSQL `xmin`
+
+**Status:** Active. Source: session 6 (M3 Part 0), confirmed by the user; spec §4 rule 7.
+
+**Decision:** Accounts, Categories, and Transactions use the PostgreSQL `xmin` system column as an EF Core concurrency token (no extra column). The current version is returned in responses and sent back on `PUT`; a stale update returns `409 Conflict` as ProblemDetails.
+
+**Why:** Rule 7 requires an explicit strategy; `xmin` needs no schema column or manual increment and is supported by Npgsql.
+
+**Alternatives considered:** A manual `RowVersion` integer/bytea column — portable but needs maintenance code and a trigger or manual bump; not chosen. Last-write-wins — rejected by rule 7.
+
+**Consequence:** `xmin` is a PostgreSQL-specific detail; moving off PostgreSQL would need a replacement. Concurrency exceptions must be mapped in `GlobalExceptionHandler`.
+
+## 2026-11-11 — D028: Categories: one level of subcategory, same type as parent, archive cascades down
+
+**Status:** Active. Source: session 6 (M3 Part 0), confirmed by the user; spec §3.4, §6.2.
+
+**Decision:** A category is either top-level or a direct subcategory; subcategories cannot have subcategories. A subcategory has the same `Type` (Income/Expense) as its parent. Archiving a parent also archives its subcategories.
+
+**Why:** Matches the spec's 'parent categories and subcategories' without the cost of arbitrary-depth trees (queries, UI, cycle prevention).
+
+**Alternatives considered:** Arbitrary depth — needs recursive queries and cycle checks for no stated product need; not chosen.
+
+**Consequence:** Depth is enforced in the domain and tested. Going deeper later is a rule change plus a UI change, not a schema change.
+
+## 2026-11-11 — D029: Transactions are hard-deleted; accounts and categories are archived, never deleted
+
+**Status:** Active. Source: session 6 (M3 Part 0), confirmed by the user; spec §3.2, §3.3, §3.4, §4 rule 9.
+
+**Decision:** `DELETE /transactions/{id}` removes the row; its balance effect disappears because balances are derived from the ledger (D006). Accounts and categories have no delete endpoint, only archive.
+
+**Why:** Spec §3.2 requires deleting transactions; historical activity must survive account/category archiving (rule 9).
+
+**Alternatives considered:** Soft-deleting transactions — would need an exclusion filter in every balance and total query; not chosen for M3.
+
+**Consequence:** Deleted transactions are unrecoverable (no audit trail in M3). Foreign keys use `Restrict`, so an account or category with history can only ever be archived.
+
+## 2026-11-11 — D030: Amounts: reject more than 2 decimal places, never round
+
+**Status:** Active. Source: session 6 (M3 Part 0), confirmed by the user; spec §3.2, §6, §4 rule 1; D005.
+
+**Decision:** A request amount must be greater than zero, have at most 2 decimal places, and fit `numeric(18,2)`. Values with extra decimals are rejected with a validation error rather than rounded.
+
+**Why:** Silent rounding of money hides input errors and can make a reconciliation fail by a paisa.
+
+**Alternatives considered:** Round to 2 decimals (banker's or half-up) — convenient but silently changes what the user typed; not chosen.
+
+**Consequence:** CSV import (M6) must normalise or reject statement amounts under the same rule.
+
+## 2026-11-11 — D031: Opening balance stays editable; currency fixed to PKR
+
+**Status:** Active. Source: session 6 (M3 Part 0), confirmed by the user; spec §3.3; D004, D006.
+
+**Decision:** An account's opening balance can be edited at any time, because the balance is derived from opening balance plus ledger (D006). `CurrencyCode` is stored on the account but fixed to `PKR` in this release and not accepted from a request.
+
+**Why:** Editing the opening balance is a correction, not a ledger event; the stored currency code keeps the model extensible without enabling multi-currency.
+
+**Alternatives considered:** Locking the opening balance once transactions exist — safer against accidental edits but blocks legitimate corrections; not chosen.
+
+**Consequence:** Changing an opening balance changes every historical balance for that account, so the update is covered by a reconciliation test.
+
+## 2026-11-11 — D032: Account balance endpoint accepts an optional `asOf` date
+
+**Status:** Active. Source: session 6 (M3 Part 0), confirmed by the user; spec §7.3, §6.4; D006.
+
+**Decision:** `GET /accounts/{id}/balance` returns the balance as of an optional `asOf` date (default: today), computed as opening balance plus ledger movements on or before that date in one database query.
+
+**Why:** A point-in-time balance is the natural form of a ledger-derived balance and is needed for reconciliation tests and later reports.
+
+**Alternatives considered:** A current-balance-only endpoint — simpler but would need reworking for reports; not chosen.
+
+**Consequence:** Transactions dated after `asOf` are excluded; future-dated transactions do not affect today's balance.
+
+## 2026-11-11 — D033: Same-owner rule enforced by composite keys in the database
+
+**Status:** Active. Source: session 6 (M3 Part 2); spec §4 rule 14, §6.3.
+
+**Decision:** Accounts and Categories each have a unique key on `(UserId, Id)`.
+Transactions reference accounts and categories through composite foreign keys
+`(UserId, SourceAccountId)`, `(UserId, DestinationAccountId)`, and
+`(UserId, CategoryId)`; a subcategory references its parent through
+`(UserId, ParentCategoryId)`. The database therefore refuses a row that points
+at another owner's account or category. Nullable parts (destination, category,
+parent) skip the check when NULL, which is what non-transfers and top-level
+categories need. All foreign keys are `Restrict`.
+
+**Why:** Rule 14 asks for constraints in addition to application checks, and
+cross-owner access is the worst failure in a finance app. Application checks
+(domain entities, `FindAsync` by owner) stay as the first line.
+
+**Alternatives considered:** Application checks only — one forgotten check
+would be a silent data leak. Single-column foreign keys — cannot express
+"same owner".
+
+**Consequence:** Extra unique indexes on `(UserId, Id)`; foreign-key indexes
+start with `UserId`, which suits the owner-scoped queries (D026). Tests that
+create throwaway users must delete their data before the user, because the user
+foreign keys are `Restrict`. Two rules cannot be expressed as a constraint and
+rely on the domain and tests: an income/expense category's type matching the
+transaction's type, and one-level subcategories of the same type (D028).
+
+## 2026-11-11 — D034: Default-category seeding is serialized with a PostgreSQL advisory lock
+
+**Status:** Active. Source: session 6 (M3 Part 2); refines D021.
+
+**Decision:** The seeder takes `pg_advisory_lock` on a connection held open
+while it checks "does the seed user have categories?" and inserts the defaults,
+then releases it. Seeding is limited to the user named by `SeedUser:Email`.
+
+**Why:** The first `dotnet test` run failed 3 of 7 tests with `40P01 deadlock
+detected`: xUnit starts several `WebApplicationFactory` hosts in parallel, and
+each ran the seeder and inserted the same categories at once. A catch-and-retry
+was rejected because the non-retrying Npgsql strategy wraps the failure in an
+`InvalidOperationException`, and a retry loop would only hide a race that a lock
+removes.
+
+**Alternatives considered:** Catching the failure and re-checking; skipping the
+seeder in test hosts; seeding in a one-off command instead of at startup.
+
+**Consequence:** Any future startup seeding that inserts rows must use the same
+lock (or another serialization). The lock key is a constant in
+`DatabaseSeeder`.
+
+## 2026-11-11 — D035: Application layer structure
+
+**Status:** Active. Source: session 6 (M3 Part 3); refines D001, D013, D025.
+
+**Decision:** Use cases are plain scoped classes, one per feature area
+(`AccountService`, `CategoryService`, later `TransactionService`), in
+`Raqam.Application`. Request/response records and their FluentValidation
+validators live next to them, and the API scans that assembly for validators.
+Services depend on repository interfaces (D025), `IUnitOfWork`, `ICurrentUser`,
+and `TimeProvider`; they hold no HTTP or EF Core types. `NotFoundException`
+(404) and `ConflictException` (409), next to the domain's `DomainException`
+(400), are mapped by `GlobalExceptionHandler`. Enums travel in JSON as names
+(`JsonStringEnumConverter`), and enum fields in create/update requests are
+nullable so a left-out value is a validation error, not the first enum value.
+No MediatR or similar.
+
+**Why:** The simplest structure that keeps the layering of D001 and is easy to
+unit-test; no extra dependency (the user prefers minimal solutions).
+
+**Alternatives considered:** MediatR-style handlers — more types per use case
+for no current benefit. Request records in the Api project — would split a use
+case across two assemblies.
+
+**Consequence:** `Raqam.Application` gains a package reference to
+`FluentValidation` (added with `dotnet add`, not by editing the csproj). Services
+are registered in `Program.cs`. Responses carry the row `Version`, and updates
+must send it back (D027).
+
+## 2026-11-11 — D036: Transaction list filters, balance and ledger totals
+
+**Status:** Active. Source: session 6 (M3 Part 3, slice 2); refines D006, D022, D023, D032.
+
+**Decision:**
+- `GET` list filters (all optional, combined with AND): `from`/`to` (inclusive,
+  `DateOnly`), `type`, `accountId` (matches either side of a transfer, so it is
+  also the account history), `categoryId`, `search`, `sort`, `page`,
+  `pageSize`. `categoryId` on a top-level category also matches its
+  subcategories. `search` is a case-insensitive "contains" on description and
+  merchant, with `%` and `_` escaped. `sort` is `DateDesc` (default), `DateAsc`,
+  `AmountDesc`, `AmountAsc`, with a fixed tie-break so paging is stable. Page
+  size defaults to 20, maximum 100. The response is
+  `{ items, page, pageSize, totalCount, totalPages }`.
+- Balance = opening balance + income − expense + transfers in − transfers out,
+  from one aggregate SQL query (four conditional sums) over the owner's
+  transactions for that account, up to and including `asOf` when given. The
+  opening balance always counts, whatever `asOf` is. The response returns the
+  four components as well as the balance. `Transaction.SignedEffectOn` stays the
+  single definition of direction; a test must check the SQL agrees with it.
+- Ledger totals (income and expense for a date range, optionally one account)
+  exclude transfers and are computed in one aggregate query.
+- A body that names an account or category that is missing, or another user's,
+  gets 404 ("Source account was not found." and so on); the domain's own
+  same-owner message is a backstop only.
+- Update takes the `Version` the client last saw (D027); delete is a hard
+  delete (D029) with no version.
+
+**Why:** The frontend needs one flexible list endpoint; a parent-category filter
+that ignored its subcategories would look wrong. Returning the balance
+components lets the UI and the tests check the sum.
+
+**Alternatives considered:** loading transactions and summing in memory (rejected
+by rule 15); a cached balance column (rejected by D006); exact-match-only
+category filter (surprising for parent categories).
+
+**Consequence:** Slice 2 adds `ITransactionRepository`, `TransactionService`,
+`LedgerService`, `TransactionRepository`. Controllers (Part 4) expose
+`GET /accounts/{id}/balance?asOf=` and `GET /accounts/{id}/transactions`; the
+ledger-totals endpoint is M5 (dashboard), so for now totals are exercised by
+tests only.

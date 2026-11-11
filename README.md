@@ -4,8 +4,10 @@ Raqam (رقم, "amount") is a personal finance and expense tracker: a single-use
 PKR-first web application for tracking accounts, income, expenses, transfers,
 budgets, and more.
 
-Status: M2 (authentication and security) nearly complete. No financial
-features are implemented yet — see `.ai/ROADMAP.md`.
+Status: M3 (core financial domain and database) complete. The API manages
+accounts, categories, and income / expense / transfer transactions with
+ledger-based balances, behind cookie authentication and optional 2FA. There is
+no frontend feature yet (M4) — see `.ai/ROADMAP.md`.
 
 - Specification: [docs/raqam-project-specification.md](docs/raqam-project-specification.md)
 - Project memory and current state: [.ai/CONTEXT.md](.ai/CONTEXT.md)
@@ -20,6 +22,11 @@ backend/
     Raqam.Application/     use cases and contracts; depends on Domain
     Raqam.Infrastructure/  persistence and integrations; depends on Application, Domain
     Raqam.Api/             ASP.NET Core entry point; depends on Application, Infrastructure
+  tests/
+    Raqam.Domain.Tests/    unit tests for the entities and money rules (no database)
+    Raqam.Api.Tests/       integration tests over HTTP against the real local PostgreSQL
+scripts/
+  m3-smoke.sh              curl walkthrough of the M3 API (see below)
 frontend/
   raqam-web/               React + TypeScript + Vite + Tailwind CSS
 docs/                      specification and architecture notes
@@ -30,7 +37,7 @@ docs/                      specification and architecture notes
 
 - .NET SDK 10
 - Node.js 22.12 or newer, with npm
-- PostgreSQL 17 (from Phase 1)
+- PostgreSQL 17
 
 ## Database setup (local)
 
@@ -75,7 +82,15 @@ dotnet build Raqam.sln
 dotnet run --project src/Raqam.Api
 ```
 
-The API listens on http://localhost:5196. Check it with:
+The API listens on http://localhost:5196. To use HTTPS (needed for the cookie
+walkthroughs below, because the auth cookies are `Secure`), run it with the
+`https` launch profile, which listens on https://localhost:7271:
+
+```bash
+dotnet run --project src/Raqam.Api --launch-profile https
+```
+
+Check it with:
 
 ```bash
 curl http://localhost:5196/health
@@ -91,8 +106,16 @@ cd backend
 dotnet test Raqam.sln
 ```
 
-The integration test boots the API in-process and checks `/health` against
-the real local database configured above — there is no in-memory substitute.
+There are two test projects:
+
+- `Raqam.Domain.Tests` — fast unit tests of the entities and money rules; no
+  database.
+- `Raqam.Api.Tests` — integration tests that boot the API in-process and use
+  the real local database configured above (there is no in-memory substitute).
+  Each test creates its own throwaway user and deletes everything it created,
+  so the tests can run against `raqam_dev` without touching your own data.
+  They use a test host that raises the login rate limit; the rate-limit test
+  itself runs against the real limit.
 
 ## Authentication
 
@@ -163,6 +186,78 @@ sign in if you lose access to the authenticator app. `POST
 
 Login attempts and 2FA verification share a rate limit: 5 attempts per
 minute per IP address (D019), returning `429 Too Many Requests` beyond that.
+The limit can be changed with the `RateLimiting:LoginPermitLimit` setting
+(default 5; only the tests raise it).
+
+## Accounts, categories and transactions
+
+All endpoints are under `/api/v1`, need a signed-in session, and (for
+`POST`/`PUT`/`DELETE`) the `X-CSRF-TOKEN` header described above.
+
+| Endpoint | What it does |
+|---|---|
+| `GET/POST /accounts` | list / create accounts |
+| `GET/PUT /accounts/{id}` | read / edit one account |
+| `POST /accounts/{id}/archive` | archive (accounts with history are never deleted) |
+| `GET /accounts/{id}/transactions` | that account's history (transfers appear on both sides) |
+| `GET /accounts/{id}/balance?asOf=YYYY-MM-DD` | balance, with its components; `asOf` is optional |
+| `GET/POST /categories`, `GET/PUT /categories/{id}`, `POST /categories/{id}/archive` | categories and one level of subcategories; archiving a parent archives its children |
+| `GET/POST /transactions` | list (filterable) / create |
+| `GET/PUT/DELETE /transactions/{id}` | read / edit / delete one transaction |
+
+Rules worth knowing:
+
+- Money is a decimal, always positive, at most 2 decimal places; the
+  transaction type gives the direction. Currency is PKR.
+- A transaction is one of three shapes: `Income` (one account and an income
+  category), `Expense` (one account and an expense category), `Transfer`
+  (a source and a different destination account, no category). A transfer is
+  a single row and is never counted as income or expense.
+- A balance is never stored: it is the opening balance plus income, minus
+  expenses, plus transfers in, minus transfers out, computed in one database
+  query.
+- `PUT` needs the `version` from the last response; a stale one returns
+  `409`. Another user's record is `404`, never `403`. A broken rule is `400`.
+- `GET /transactions` filters: `from`, `to` (inclusive dates), `type`,
+  `accountId` (either side of a transfer), `categoryId` (includes its
+  subcategories), `search` (description or merchant), `sort`
+  (`DateDesc` default, `DateAsc`, `AmountDesc`, `AmountAsc`), `page`,
+  `pageSize` (default 20, max 100). The response is
+  `{items, page, pageSize, totalCount, totalPages}`.
+
+A short walkthrough (HTTPS, with the API running on the `https` profile):
+
+```bash
+BASE=https://localhost:7271
+# Sign in, then fetch a CSRF token (it is tied to the signed-in user)
+curl -sk -c jar.txt -X POST $BASE/api/v1/auth/login -H "Content-Type: application/json" \
+  -d '{"email":"you@example.com","password":"A_Compliant_Password1!"}'
+CSRF=$(curl -sk -b jar.txt -c jar.txt $BASE/api/v1/auth/csrf-token | jq -r .token)
+
+# Two accounts and a category (the responses contain each id)
+curl -sk -b jar.txt -X POST $BASE/api/v1/accounts -H "Content-Type: application/json" -H "X-CSRF-TOKEN: $CSRF" \
+  -d '{"name":"Cash","accountType":"Cash","openingBalance":1000,"institutionName":null}'
+curl -sk -b jar.txt -X POST $BASE/api/v1/accounts -H "Content-Type: application/json" -H "X-CSRF-TOKEN: $CSRF" \
+  -d '{"name":"Bank","accountType":"BankAccount","openingBalance":0,"institutionName":"My Bank"}'
+curl -sk -b jar.txt -X POST $BASE/api/v1/categories -H "Content-Type: application/json" -H "X-CSRF-TOKEN: $CSRF" \
+  -d '{"name":"Food","type":"Expense","parentCategoryId":null,"colour":null,"icon":null}'
+
+# An expense, then a transfer (use the ids returned above)
+curl -sk -b jar.txt -X POST $BASE/api/v1/transactions -H "Content-Type: application/json" -H "X-CSRF-TOKEN: $CSRF" \
+  -d '{"type":"Expense","amount":250.50,"transactionDate":"2026-11-11","sourceAccountId":"<cash-id>","categoryId":"<food-id>","description":"Lunch"}'
+curl -sk -b jar.txt -X POST $BASE/api/v1/transactions -H "Content-Type: application/json" -H "X-CSRF-TOKEN: $CSRF" \
+  -d '{"type":"Transfer","amount":300,"transactionDate":"2026-11-11","sourceAccountId":"<cash-id>","destinationAccountId":"<bank-id>"}'
+
+# Balances: Cash = 1000 - 250.50 - 300 = 449.50, Bank = 300
+curl -sk -b jar.txt $BASE/api/v1/accounts/<cash-id>/balance
+curl -sk -b jar.txt $BASE/api/v1/accounts/<bank-id>/balance
+```
+
+`scripts/m3-smoke.sh` runs a much longer version of this against a running
+API (login, every endpoint, the conflict and not-found cases, balances, filters,
+paging) and prints a pass/fail count. It asks for the password, reads the email
+from `RAQAM_EMAIL`, and leaves a few archived test accounts and categories in
+the dev database.
 
 ## Run the frontend
 

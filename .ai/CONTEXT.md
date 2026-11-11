@@ -10,11 +10,13 @@ procedures. Planned as a layered modular monolith: ASP.NET Core (.NET 10) API,
 PostgreSQL, React + TypeScript + Vite + Tailwind frontend, hosted on
 Render / Neon / Vercel.
 
-**State as of 2026-11-10 (session 2):** Phase 0 skeleton. `backend/Raqam.sln`
-with four projects, `frontend/raqam-web` (Vite + React + TypeScript + Tailwind),
-`.gitignore`, `.env.example`, and `README.md` exist. No product feature exists.
-M0 is complete: the user confirmed the skeleton works on the Mac and is pushed
-to GitHub (session 3). M1 is active and not yet started in code.
+**State as of 2026-11-11 (session 6):** M0, M1, M2 and M3 are complete.
+`backend/Raqam.sln` has the four source projects plus `Raqam.Domain.Tests` and
+`Raqam.Api.Tests`. The API has cookie authentication with TOTP 2FA, and the
+accounts, categories and transactions endpoints with ledger-based balances,
+backed by PostgreSQL migrations. `frontend/raqam-web` is still the Vite skeleton
+(no feature). M4 (core frontend) is next and has not been opened; its open
+decisions need discussing with the user first.
 
 ## How to determine current state
 

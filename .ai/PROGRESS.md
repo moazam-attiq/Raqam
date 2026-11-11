@@ -3,6 +3,119 @@
 Reverse chronological. Record what actually happened; never rewrite earlier
 entries.
 
+## 2026-11-11 — Session 5: Identity auth verified; owner-scoping, CSRF, rate limiting, and TOTP 2FA built
+
+**Context:** Continuing M2. Previous session left `AuthController`
+(login/logout/me) and the authorization fallback policy written but not yet
+run.
+
+**What changed:**
+
+- `AddIdentity` migration created and applied; `AspNetUsers`/`AspNetRoles`/
+  etc. confirmed on the Mac via `psql \dt` (8 Identity tables present).
+- Seed user created via `DatabaseSeeder` reading `SeedUser:Email`/
+  `SeedUser:Password` from user-secrets (public registration stays off, D017).
+  One failed attempt hit Identity's password policy (12+ chars, mixed case,
+  symbol) — not a bug; user retried with a compliant password.
+- Login flow verified end-to-end on the Mac via curl: `POST /auth/login` sets
+  the auth cookie, `GET /auth/me` returns the signed-in user using that
+  cookie. This also confirms the global fallback authorization policy and the
+  cookie auth transport (D016) are working together as intended.
+- Owner-scoping infrastructure added: `ICurrentUser` (`Raqam.Application.Common`)
+  and its implementation `CurrentUser` (`Raqam.Api.Services`, via
+  `IHttpContextAccessor` + `ClaimTypes.NameIdentifier`), registered in
+  `Program.cs` (`AddHttpContextAccessor` + `AddScoped<ICurrentUser, CurrentUser>`).
+  Build and tests pass (no entities exist yet to call it from — real exercise
+  comes in M3 when owner-scoped records are introduced).
+- CSRF protection added (D018): ASP.NET Core antiforgery, double-submit header.
+  `GET /auth/csrf-token` issues the token; `POST /auth/login` is exempted
+  since no session exists yet to validate against. Two problems along the
+  way, both fixed: (1) a namespace mistake —
+  `AutoValidateAntiforgeryTokenAttribute`/`IgnoreAntiforgeryTokenAttribute`
+  are in `Microsoft.AspNetCore.Mvc`, not `.Mvc.ViewFeatures` as first
+  guessed; (2) a deeper problem — even with the right namespace,
+  `AutoValidateAntiforgeryTokenAttribute` failed at request time
+  (`No service for type ...AutoValidateAntiforgeryTokenAuthorizationFilter
+  has been registered`) because that attribute needs MVC view-engine DI
+  registrations that only `AddControllersWithViews`/`AddMvc` set up, which
+  this API-only project (`AddControllers`) doesn't have. Replaced with a
+  project-written `CsrfFilter` (`Raqam.Api.Validation`) that calls
+  `IAntiforgery.ValidateRequestAsync` directly, and a `[SkipCsrfValidation]`
+  marker attribute replacing `[IgnoreAntiforgeryToken]`. Build and tests pass
+  after the fix.
+- Rate limiting added (D019) on `POST /auth/login`: built-in
+  `Microsoft.AspNetCore.RateLimiting`, fixed-window limiter keyed by client
+  IP, 5 attempts/minute, `429` beyond that. Build and tests pass.
+- Three automated tests added, closing out most of M2 Part 2 verification:
+  `AuthorizationTests.Me_WithoutAuthentication_ReturnsUnauthorized` (401),
+  `RateLimitingTests.Login_SixthAttemptWithinAMinute_ReturnsTooManyRequests`
+  (429, D019), and `CsrfTests` (`Logout_WithoutCsrfToken_IsRejected` /
+  `Logout_WithValidCsrfToken_Succeeds`, D018). `CsrfTests` creates and
+  deletes its own throwaway user via `UserManager` rather than using the
+  real seed credentials, which live only in the user's secrets. Only two
+  Part 2 items remain, both genuinely blocked rather than skipped: 2FA
+  verification (2FA isn't built) and the cross-user-id test (needs an
+  owner-scoped entity from M3).
+- TOTP 2FA added (D020), the last deferred M2 Part 1 item: a new
+  `TwoFactorController` (`api/v1/auth/two-factor`) with `Status`, `Setup`,
+  `Enable`, `Disable`, `Verify`, and `RedeemRecoveryCode`, built entirely on
+  Identity's own `UserManager`/`SignInManager` TOTP and recovery-code
+  mechanisms (no hand-rolled crypto). `Setup` returns the shared key plus an
+  `otpauth://` URI for the frontend to render as a QR code. `Enable` issues 10
+  recovery codes. `Verify`/`RedeemRecoveryCode` are `[AllowAnonymous]`,
+  `[SkipCsrfValidation]`, and share the `"login"` rate-limit policy (D019),
+  since they complete a login rather than acting on an existing session. Six
+  new contract records added under `Contracts/Auth/`.
+- Two automated tests added in `TwoFactorTests.cs`, closing the remaining
+  2FA item in M2 Part 2: `EnableAndDisable_RoundTrip_UpdatesStatus` and
+  `Login_WithTwoFactorEnabled_RequiresVerifyToCompleteSignIn` (full login →
+  2FA-required → verify → authenticated flow). Both create and delete their
+  own throwaway test user via `UserManager`, reimplementing RFC 6238 TOTP
+  code generation and RFC 4648 Base32 decoding directly in the test (Identity's
+  own `Rfc6238AuthenticationService` is internal). Build and tests pass, all 7
+  green. Only one M2 Part 2 item remains, and it's genuinely blocked rather
+  than skipped: the cross-user-id test, which needs an owner-scoped entity
+  from M3.
+- Process note: pushing a file to the Mac via the device bridge repeatedly
+  reported success while the old content stayed on disk (silent push
+  failure, same class of issue as earlier sessions, but far more frequent
+  this session — happened on `Program.cs`, `AuthController.cs`, and
+  `.ai/TASKS.md`/`.ai/DECISIONS.md` multiple times each). Standing practice
+  going forward: after every push, re-stage the file and read its actual
+  content (not just byte count/mtime, which can also look changed without
+  the real content landing) before relying on it or telling the user to
+  build; retry (plain, then `force: true`) until a content read confirms
+  the push actually landed.
+
+**Verification:**
+
+- User-confirmed via shared output: Identity tables exist; seed user created;
+  login → `/auth/me` round-trip succeeds with the cookie; `dotnet build` +
+  `dotnet test` pass after owner-scoping, after CSRF, after rate limiting,
+  and after TOTP 2FA (four separate confirmed build/test cycles, the last
+  with all 7 tests green including the two new 2FA tests).
+
+- README updated with an Authentication section: seed-user setup, the
+  CSRF/login/me curl flow, and a full 2FA enrollment walkthrough
+  (`setup` → authenticator app → `enable` → recovery codes), plus the shared
+  login/2FA rate limit. M2 Part 3 documentation is now complete: all of
+  D016–D020 were recorded as each decision was made, and this entry closes
+  out the session log.
+- M2 marked `[x]` in `ROADMAP.md`. The only item from its original
+  verification list not actually run — "ownership tests pass" — is recorded
+  there as carried forward to M3 rather than outstanding M2 work, since
+  there is no owner-scoped entity yet to test against.
+
+**Not done:** nothing further within M2's own scope. M3 has not been
+started: `TASKS.md` still holds the M2 checklist and needs replacing with
+the M3 checklist (including the carried-forward ownership test) before M3
+work begins.
+
+**Next:** open M3 — read spec §11 Phase 3, discuss any open M3 decisions
+with the user, and replace `TASKS.md` with the M3 checklist (Accounts,
+Categories, Transactions, balance calculation, the ownership test carried
+over from M2).
+
 ## 2026-11-10 — Session 3: M0 closed, M1 opened
 
 **Context:** The user reported that everything was good on the Mac and that

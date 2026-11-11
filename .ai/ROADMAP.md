@@ -68,7 +68,7 @@ migrations apply cleanly; a basic integration test passes.
 **Manual actions:** local PostgreSQL (native or Podman) available with
 credentials supplied by the user.
 
-## [~] M2 — Authentication and security
+## [x] M2 — Authentication and security
 
 **Objective:** secure single-user sign-in with 2FA and owner scoping.
 
@@ -81,6 +81,19 @@ anonymous requests; ownership tests pass.
 
 **Manual actions:** user enrolls an authenticator app and confirms TOTP and
 recovery codes. Decisions needed: auth transport, public registration.
+
+**Completed 2026-11-11 (session 5):** Identity with cookie auth (D016), no
+public registration (D017), CSRF via a custom filter (D018), IP-keyed rate
+limiting on login and 2FA (D019), and TOTP 2FA with recovery codes (D020) —
+all built and verified by user-shared build/test output, including automated
+tests for anonymous rejection, CSRF, rate limiting, and the full 2FA
+enrollment/login flow. One verification item from the original list —
+"ownership tests pass" — could not be run: there is no owner-scoped entity
+yet to test against (`ICurrentUser`/`CurrentUser` are wired up and covered by
+build/tests, but have nothing real to be exercised on until M3 creates the
+first owned entity). That single item is carried forward as an M3 task
+rather than treated as outstanding M2 work. README documentation (login,
+CSRF, 2FA) added.
 
 ## [ ] M3 — Core financial domain and database
 
@@ -192,5 +205,7 @@ Action Rule.
 
 ## Current milestone
 
-**M2 — Authentication and security** (starting; nothing implemented yet).
-Detailed checklist: `TASKS.md`.
+**M3 — Core financial domain and database** (not yet started). `TASKS.md`
+still holds the M2 checklist (M2 is closed above) — replace it with the M3
+checklist, including the carried-forward ownership test, before starting M3
+work.

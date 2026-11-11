@@ -337,3 +337,121 @@ not chosen.
 has a user, and must not log the generated password. Exact mechanism (EF
 Core seed data vs. a startup check vs. a CLI command) is decided during
 implementation and recorded here once built.
+
+## 2026-11-11 — D018: CSRF via ASP.NET Core antiforgery (double-submit header)
+
+**Status:** Active. Source: session 5.
+
+**Decision:** Every unsafe-verb action (`POST`/`PUT`/`PATCH`/`DELETE`)
+requires a validated antiforgery token, enforced globally via a
+project-written `CsrfFilter` (`Raqam.Api.Validation`) added as an MVC filter
+in `AddControllers`. `GET /auth/csrf-token` issues the token (cookie
+`XSRF-TOKEN` + a request token returned in the response body) for the
+frontend to echo back in the `X-CSRF-TOKEN` header. `POST /auth/login` is
+exempted via `[SkipCsrfValidation]`, since no session exists yet to have
+handed out a matching token before the user signs in.
+
+**Implementation note (corrected during the same session):** the first
+attempt used the built-in `AutoValidateAntiforgeryTokenAttribute`, which
+failed at request time with `No service for type
+...AutoValidateAntiforgeryTokenAuthorizationFilter has been registered` —
+that attribute resolves its filter through DI registrations that only
+`AddControllersWithViews`/`AddMvc` set up (MVC's view-engine "ViewFeatures"
+services), which this API-only project (`AddControllers`) doesn't register.
+`CsrfFilter` is a small `IAsyncActionFilter` that calls
+`IAntiforgery.ValidateRequestAsync` directly instead, with the same
+behavior and no dependency on the view engine. `[SkipCsrfValidation]` is the
+project's own marker attribute, replacing `[IgnoreAntiforgeryToken]` for the
+same reason.
+
+**Why:** The cookie-based auth transport (D016) needs `SameSite=None` to
+work across the Vercel/Render domain split, which rules out `SameSite` as a
+CSRF defense on its own (spec §7.1/§16 flagged this as a consequence of
+D016). The built-in antiforgery system is the standard ASP.NET Core answer
+and needs no extra package.
+
+**Alternatives considered:** Custom header-presence check (e.g. requiring a
+`X-Requested-With` header) — weaker, since it only relies on browsers
+refusing to let cross-site requests set custom headers without CORS
+pre-flight, which isn't a documented security guarantee; not chosen. Login
+CSRF (forging a login request to log the single known seed user into an
+attacker-controlled session) was considered and accepted as out of scope for
+now given there's no sensitive action reachable without owner-scoped data
+yet (M3+).
+
+**Consequence:** The frontend must call `GET /auth/csrf-token` once and send
+the token back as `X-CSRF-TOKEN` on every mutating request, including
+`POST /auth/logout` and every endpoint from M3 onward. Revisit the
+login-CSRF decision once the app has state worth protecting at that point.
+
+## 2026-11-11 — D019: Rate limiting on login via the built-in RateLimiting middleware
+
+**Status:** Active. Source: session 5.
+
+**Decision:** `POST /auth/login` is limited to 5 attempts per minute per
+client IP address, using `Microsoft.AspNetCore.RateLimiting`'s fixed-window
+limiter (`AddRateLimiter`/`UseRateLimiter`, policy applied via
+`[EnableRateLimiting("login")]`). Exceeding it returns `429 Too Many
+Requests` with no queueing.
+
+**Why:** Spec §8.1 calls for rate limiting on login. Keying by IP (rather
+than the submitted email) also slows down guessing against emails that
+don't exist yet, which Identity's own per-account lockout (configured in
+`AddInfrastructure`) can't do since it only engages once an account is
+actually found. No extra package needed — it ships with the ASP.NET Core
+SDK, consistent with the project's preference for built-in options over
+third-party packages where one suffices (see D012/D013/D014).
+
+**Alternatives considered:** A sliding-window or token-bucket limiter —
+smoother under bursty legitimate traffic, but this is a single-user login
+endpoint with no legitimate burst pattern to protect; the simpler fixed
+window was chosen. Keying by submitted email instead of IP — would let an
+attacker rotate IPs to dodge it per-address but also lets one misbehaving IP
+lock out everyone sharing it (NAT, campus Wi-Fi); IP was chosen since there
+is exactly one legitimate account and sharing isn't a realistic concern
+here.
+
+**Consequence:** The same `"login"` policy (or a dedicated one) should be
+applied to the TOTP 2FA verify endpoint once it's built, since it's an
+equally attractive brute-force target. Revisit the limit (5/minute) if it
+proves too tight for normal use once there's a real frontend driving retries
+after typos.
+
+## 2026-11-11 — D020: TOTP 2FA via ASP.NET Core Identity's built-in mechanisms
+
+**Status:** Active. Source: session 5; completes D007's 2FA commitment.
+
+**Decision:** 2FA is implemented entirely through Identity's existing
+`UserManager`/`SignInManager` APIs — `GetAuthenticatorKeyAsync` /
+`ResetAuthenticatorKeyAsync` for enrollment, `VerifyTwoFactorTokenAsync` /
+`SetTwoFactorEnabledAsync` to enable, `GenerateNewTwoFactorRecoveryCodesAsync`
+(10 codes) on enable, and `TwoFactorAuthenticatorSignInAsync` /
+`TwoFactorRecoveryCodeSignInAsync` to complete a login that Identity has
+already flagged as requiring a second factor. A new `TwoFactorController`
+(`api/v1/auth/two-factor`) exposes `Status`, `Setup`, `Enable`, `Disable`,
+`Verify`, and `RedeemRecoveryCode`. `Setup` returns the shared key and an
+`otpauth://` URI the frontend renders as a QR code; no server-side QR
+generation. `Verify` and `RedeemRecoveryCode` are `[AllowAnonymous]` (the
+user isn't fully signed in yet at that point) and `[SkipCsrfValidation]`
+(same reasoning as `POST /auth/login` in D018 — no session/token exists yet),
+and carry the same `[EnableRateLimiting("login")]` policy as login per D019's
+consequence note, since they're an equally attractive brute-force target.
+
+**Why:** Avoids reimplementing RFC 6238 TOTP or RFC 4648 Base32 by hand;
+Identity's mechanisms are the supported, audited path and were already
+committed to in D007.
+
+**Alternatives considered:** A "remember this device" cookie to skip 2FA on
+trusted devices — not implemented; the spec doesn't call for it and it adds
+attack surface for a single-user app. A separate, dedicated rate-limit policy
+for the 2FA endpoints instead of reusing `"login"` — not chosen; the two
+endpoints protect the same account and a shared budget is simpler to reason
+about.
+
+**Consequence:** The frontend must handle the two-step login flow (initial
+`POST /auth/login` succeeding but indicating 2FA is required, then a second
+call to `Verify` or `RedeemRecoveryCode` to actually establish the session).
+Recovery codes are single-use and Identity consumes them automatically on
+redemption; the UI should prompt the user to regenerate and re-save them once
+the supply runs low (not yet built — no endpoint surfaces remaining-code
+count).

@@ -9,30 +9,23 @@ registration is enabled.
 
 ### Part 0 — Decisions (discuss with the user, then record in `DECISIONS.md`)
 
-- [ ] Auth transport: secure HttpOnly cookie vs JWT. Frontend (Vercel) and API
-      (Render) will likely be on different domains (spec §16 item 1,
-      §9.2–§9.3) — this affects CORS, SameSite, and CSRF choices made here.
-- [ ] Public registration: likely disabled/restricted for a single-user app
-      (spec §16 item 2) — decide whether `POST /auth/register` exists at all,
-      or whether the one user is seeded instead.
+- [x] Auth transport: secure HttpOnly cookie (D016)
+- [x] Public registration: off; the one user is seeded instead (D017)
 
 ### Part 1 — Implementation
 
-- [ ] Add ASP.NET Core Identity (`Microsoft.AspNetCore.Identity.EntityFrameworkCore`)
-      to Infrastructure; `RaqamDbContext` extends `IdentityDbContext` with a
-      UUID key (spec §6.1)
-- [ ] New migration for Identity's tables
-- [ ] Login endpoint (`POST /auth/login`), logout (`POST /auth/logout`),
-      `GET /auth/me`
+- [x] ASP.NET Core Identity added to Infrastructure; `ApplicationUser : IdentityUser<Guid>`; `RaqamDbContext` now extends `IdentityDbContext<ApplicationUser, IdentityRole<Guid>, Guid>`
+- [x] `AddIdentity` migration created and applied; `AspNetUsers`/`AspNetRoles`/etc. confirmed via `\dt` (user showed output, 2026-11-11)
+- [~] Login endpoint (`POST /auth/login`), logout (`POST /auth/logout`),
+      `GET /auth/me` — written (`AuthController`), not yet built; no 2FA step yet
 - [ ] TOTP 2FA: enable/disable endpoints, recovery codes, verify endpoint
       (`POST /auth/two-factor/*`), using Identity's built-in mechanisms
-- [ ] Authorization: require authentication on all endpoints except auth
-      itself; `[Authorize]` as the default policy
+- [~] Authorization: fallback policy requires authentication on every endpoint; `/health`, OpenAPI, and `POST /auth/login` explicitly exempted — written, not yet verified
 - [ ] Owner-scoping infrastructure: a way to get the current user's id from
       the authenticated principal (e.g. a small `ICurrentUser` service in
       Application, implemented in Api) — never trust a payload-supplied id
       (business rule 5)
-- [ ] CORS: explicit allowed-origins list from configuration
+- [~] CORS: explicit allowed-origins list from `Cors:AllowedOrigins` config (dev default: `http://localhost:5173`) — written, not yet verified
 - [ ] CSRF strategy appropriate to the chosen auth transport
 - [ ] Rate limiting on login and 2FA endpoints (built-in `Microsoft.AspNetCore.RateLimiting`)
 - [ ] Account-enumeration care: login/registration responses don't reveal

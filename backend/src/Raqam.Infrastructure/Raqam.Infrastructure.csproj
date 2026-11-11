@@ -8,6 +8,14 @@
   <ItemGroup>
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.14" />
+    <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.14" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Cookie authentication options, StatusCodes, etc. used in DependencyInjection.cs
+         are part of the ASP.NET Core shared framework, not a NuGet package — a plain
+         class library needs this reference to see them. -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
   <PropertyGroup>

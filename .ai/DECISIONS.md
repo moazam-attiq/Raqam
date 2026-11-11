@@ -270,3 +270,70 @@ a hosted log aggregator is adopted in M10.
 **Consequence:** Log format changes by environment. If a specific field
 format or external sink is needed later, this decision is revisited, not
 silently changed.
+
+## 2026-11-11 — D015: Pin Microsoft.EntityFrameworkCore explicitly in Infrastructure
+
+**Status:** Active. Source: session 4; fixes an MSB3277 warning from `dotnet build`.
+
+**Decision:** Add an explicit `PackageReference` to `Microsoft.EntityFrameworkCore`
+version `10.0.14` in `Raqam.Infrastructure.csproj`, matching the version pulled
+in transitively by `Microsoft.EntityFrameworkCore.Design` in `Raqam.Api`.
+
+**Why:** `Npgsql.EntityFrameworkCore.PostgreSQL` 10.0.3 depends on
+`Microsoft.EntityFrameworkCore` 10.0.4, which conflicted with the 10.0.14
+pulled in elsewhere; MSBuild silently picked 10.0.4 and only warned (MSB3277).
+Pinning removes the ambiguity instead of relying on MSBuild's unification
+choice.
+
+**Alternatives considered:** Central Package Management
+(`Directory.Packages.props`) — a cleaner long-term fix once there are more
+projects and packages to keep in sync; deferred until it earns its complexity.
+Ignoring the warning — rejected; a silent version choice is exactly the kind
+of thing that causes a working build to behave unexpectedly at runtime.
+
+**Consequence:** Whenever `Npgsql.EntityFrameworkCore.PostgreSQL` is upgraded,
+check whether this pinned version still matches what it expects, and bump
+both together.
+
+## 2026-11-11 — D016: Cookie-based authentication
+
+**Status:** Active. Source: session 4; resolves spec §16 open decision 1.
+
+**Decision:** Authentication uses a secure, HttpOnly cookie issued by ASP.NET
+Core Identity, not a JWT. No access token is ever stored in the frontend
+(spec §7.1 explicitly rules out localStorage for long-lived tokens).
+
+**Why:** User chose this. For a single-user app with one trusted frontend
+origin, a cookie is simpler to reason about and keeps the token out of
+JavaScript entirely; the cross-site cookie configuration it requires
+(`SameSite=None; Secure` once frontend and API are on different domains) is
+manageable with one known origin.
+
+**Alternatives considered:** JWT — avoids cross-site cookie configuration but
+pushes storage and refresh concerns onto the frontend; not chosen.
+
+**Consequence:** CORS must allow credentials from the exact frontend origin
+(no wildcard). CSRF protection is required because the browser will send the
+cookie automatically on cross-site requests; antiforgery tokens or the
+`SameSite` setting must cover this. Revisit if a future client (e.g. a
+mobile app) can't use cookies.
+
+## 2026-11-11 — D017: Public registration disabled; single user is seeded
+
+**Status:** Active. Source: session 4; resolves spec §16 open decision 2.
+
+**Decision:** No `POST /auth/register` endpoint. The single user is created
+by a startup/seed step (or a one-off script) instead of a public endpoint.
+
+**Why:** User chose this. Raqam is single-user by design (spec §1); a
+registration endpoint that can never legitimately be used by a second person
+is attack surface with no product purpose.
+
+**Alternatives considered:** A registration endpoint gated behind a setup
+token or disabled by configuration — more moving parts for the same outcome;
+not chosen.
+
+**Consequence:** The seed step must not run against a database that already
+has a user, and must not log the generated password. Exact mechanism (EF
+Core seed data vs. a startup check vs. a CLI command) is decided during
+implementation and recorded here once built.

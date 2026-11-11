@@ -1,44 +1,57 @@
 # TASKS.md — Current milestone checklist
 
-## M1 — Architecture foundation
+## M2 — Authentication and security
 
-Source: spec §11 Phase 1. The AI cannot restore NuGet packages or reach the
-Mac's shell (BLOCKERS B004): the AI writes code and commands, the user runs
-them on the Mac and shares the output. Add only the packages this phase needs.
+Source: spec §11 Phase 2, §6.1, §7.1, §8.1, §8.2, §16. Two decisions from
+`PROJECT.md` "Open technical decisions" are needed before/during this
+milestone: authentication transport (cookie vs JWT) and whether public
+registration is enabled.
 
-### Part 1 — Setup (user, on the Mac)
+### Part 0 — Decisions (discuss with the user, then record in `DECISIONS.md`)
 
-- [x] Local PostgreSQL: the installed PostgreSQL 17.10 on the Mac (D011)
-- [x] Local role and database `raqam_dev` created; user showed a successful connection as `raqam_dev`
-- [x] `Npgsql.EntityFrameworkCore.PostgreSQL` 10.0.3 (Infrastructure) and `Microsoft.EntityFrameworkCore.Design` 10.0.14 (Api) added on the Mac
-- [ ] OpenAPI package (Api)
-- [x] `dotnet-ef` installed as a local tool via `dotnet new tool-manifest` + `dotnet tool install dotnet-ef`
+- [ ] Auth transport: secure HttpOnly cookie vs JWT. Frontend (Vercel) and API
+      (Render) will likely be on different domains (spec §16 item 1,
+      §9.2–§9.3) — this affects CORS, SameSite, and CSRF choices made here.
+- [ ] Public registration: likely disabled/restricted for a single-user app
+      (spec §16 item 2) — decide whether `POST /auth/register` exists at all,
+      or whether the one user is seeded instead.
 
-### Part 2 — Implementation
+### Part 1 — Implementation
 
-- [x] `RaqamDbContext` in Infrastructure (no entities yet)
-- [x] `AddInfrastructure` extension, composed in `Program.cs`. `AddApplication` is added when Application has something to register
-- [x] Connection string from configuration (`ConnectionStrings:Default`), supplied locally through .NET user-secrets (D011), never committed
-- [x] Global exception handling (`GlobalExceptionHandler`, ProblemDetails) — built on the Mac
-- [ ] Request validation approach wired in (FluentValidation or equivalent — record the choice in `DECISIONS.md`)
-- [x] OpenAPI enabled in Development via built-in `Microsoft.AspNetCore.OpenApi` (`AddOpenApi`/`MapOpenApi`) — `GET /openapi/v1.json` returns 200 (user showed output, 2026-11-10)
-- [x] `/health` endpoint with a database check (`DatabaseHealthCheck` in Api); placeholder `PingController` removal requested, not confirmed
-- [ ] Logging configuration (structured console logging)
-- [x] Initial EF Core migration `InitialCreate` created and applied to `raqam_dev` (empty — no entities yet)
-- [ ] Test project with one integration test (health endpoint)
+- [ ] Add ASP.NET Core Identity (`Microsoft.AspNetCore.Identity.EntityFrameworkCore`)
+      to Infrastructure; `RaqamDbContext` extends `IdentityDbContext` with a
+      UUID key (spec §6.1)
+- [ ] New migration for Identity's tables
+- [ ] Login endpoint (`POST /auth/login`), logout (`POST /auth/logout`),
+      `GET /auth/me`
+- [ ] TOTP 2FA: enable/disable endpoints, recovery codes, verify endpoint
+      (`POST /auth/two-factor/*`), using Identity's built-in mechanisms
+- [ ] Authorization: require authentication on all endpoints except auth
+      itself; `[Authorize]` as the default policy
+- [ ] Owner-scoping infrastructure: a way to get the current user's id from
+      the authenticated principal (e.g. a small `ICurrentUser` service in
+      Application, implemented in Api) — never trust a payload-supplied id
+      (business rule 5)
+- [ ] CORS: explicit allowed-origins list from configuration
+- [ ] CSRF strategy appropriate to the chosen auth transport
+- [ ] Rate limiting on login and 2FA endpoints (built-in `Microsoft.AspNetCore.RateLimiting`)
+- [ ] Account-enumeration care: login/registration responses don't reveal
+      whether an email exists (spec §8.1)
 
-### Part 3 — Verification
+### Part 2 — Verification
 
-- [ ] `dotnet build backend/Raqam.sln` clean
-- [x] API connects to local PostgreSQL (user showed output, 2026-11-10)
-- [x] `GET /health` responds healthy — `200 OK`, body `Healthy` (user showed output, 2026-11-10)
-- [x] Migration applied cleanly; `__EFMigrationsHistory` created (user ran `dotnet ef database update`, 2026-11-10)
-- [ ] `dotnet test backend/Raqam.sln` passes
-- [ ] No connection string or secret in `git status` / committed files
+- [ ] User can register (if enabled) or the seeded user can log in
+- [ ] 2FA enrollment and verification work end-to-end
+- [ ] Protected endpoints reject anonymous requests (401)
+- [ ] A request with a different user's id in the payload cannot act as that
+      user — test this explicitly (spec §8.2, business rule 5)
+- [ ] Rate limiting triggers after repeated failed logins
+- [ ] No password, token, or recovery code appears in logs (business rule 15)
 
-### Part 4 — Documentation
+### Part 3 — Documentation
 
-- [ ] README run instructions updated (database setup, migrations, tests)
-- [ ] `docs/architecture.md` started if useful
-- [ ] `DECISIONS.md` updated for choices made here (validation library, OpenAPI package, how local secrets are supplied)
-- [ ] `PROGRESS.md` entry; close M1 in `ROADMAP.md` only when every Part 3 item is confirmed; replace this file with the M2 checklist
+- [ ] `DECISIONS.md`: record the transport and registration decisions, and
+      the owner-scoping approach
+- [ ] README: how to log in locally, how to enable 2FA
+- [ ] `PROGRESS.md` entry; close M2 in `ROADMAP.md` only when Part 2 is
+      confirmed; replace this file with the M3 checklist

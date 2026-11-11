@@ -157,3 +157,102 @@ ProblemDetails shape; request validation; logging; test project.
 
 **Next:** user adds the OpenAPI package, builds, and checks the new
 endpoints.
+
+
+## 2026-11-11 — Session 4: request validation, logging, and a test project
+
+**Context:** Continuing M1 Part 2 after the previous session's exception
+handling and OpenAPI work was verified and ready to commit.
+
+**What changed:**
+
+- AI wrote, unbuilt: `Api/Validation/ValidationFilter.cs`; `Program.cs`
+  updated to wire it in, configure console logging by environment, and expose
+  `public partial class Program` for test discoverability; new test project
+  `backend/tests/Raqam.Api.Tests` with one integration test
+  (`HealthEndpointTests`) against the real local database; `Raqam.Api.csproj`
+  updated with `FluentValidation.DependencyInjectionExtensions` and an
+  `InternalsVisibleTo` entry for the test project.
+- D013 (validation approach) and D014 (logging approach) recorded.
+- None of this has been built, and the test project has not been added to
+  `Raqam.sln` yet.
+
+**Verification:** Not yet attempted on the Mac.
+
+**Not done:** adding the FluentValidation package and restoring; adding the
+test project to the solution; running `dotnet test`; README and
+`docs/architecture.md` updates; the commit from the previous session (unclear
+whether it happened).
+
+**Next:** user adds the FluentValidation package, adds the test project to
+the solution, builds, and runs the tests.
+
+
+## 2026-11-11 — Session 4 (continued): EF Core version pin, and a sync mistake
+
+**Context:** Fixing the MSB3277 version-conflict warning from the previous
+build.
+
+**What changed:** added an explicit `Microsoft.EntityFrameworkCore` 10.0.14
+`PackageReference` to `Raqam.Infrastructure.csproj` (D015).
+
+**Mistake and correction (important for future sessions):** the AI's local
+copy of `Raqam.Infrastructure.csproj` had drifted from the real file — it
+never reflected the `Npgsql.EntityFrameworkCore.PostgreSQL` package the user
+had added directly on the Mac with `dotnet add`. Editing the stale local copy
+and pushing it overwrote the real file, deleting that package reference and
+breaking the build (32 compile errors — EF Core types not found). This was
+caught by re-staging and reading the device file immediately after, and fixed
+by writing the full corrected content (both package references) back. The
+first corrective push also silently failed to take effect (device reported
+"written" but the file was unchanged); a second push with `force: true`
+worked, verified by re-staging before telling the user to rebuild.
+
+**Lesson recorded:** before editing any `.csproj`, `.sln`, or tool-manifest
+file that the user also edits directly (via `dotnet add`/`dotnet tool
+install`/`dotnet sln add`), stage and read the live file on the Mac first —
+never assume the AI's local copy is current. After pushing such a file back,
+re-stage it to confirm the write actually landed before telling the user to
+build.
+
+**Verification:** user ran `dotnet build Raqam.sln` and reported success —
+MSB3277 is gone.
+
+**Not done:** README and `docs/architecture.md` updates; confirming no
+secrets are in `git status`; a Session 3/4 commit and push (unclear whether
+one has happened since the "everything is good" push in Session 3).
+
+**Next:** update README's run instructions (database setup, user-secrets,
+migrations, tests), consider a short `docs/architecture.md`, confirm `git
+status` is clean of secrets, then close M1 Part 3/4 and open M2.
+
+
+## 2026-11-11 — Session 4 (continued): M1 closed, M2 opened
+
+**What changed:** README updated with database setup, user-secrets,
+migration, and test-run instructions; `docs/architecture.md` created
+summarizing the project split and M1's cross-cutting pieces. User confirmed
+`git status` has no secrets staged. M1 marked `[x]` in `ROADMAP.md`; M2
+marked `[~]`. `TASKS.md` replaced with the M2 checklist (ASP.NET Core
+Identity, TOTP 2FA, owner scoping, CORS/CSRF, rate limiting).
+
+**M1 summary:** EF Core + Npgsql configured against the Mac's local
+PostgreSQL (D011); initial (empty) migration applied; `/health` with a real
+database check; global exception handling returning ProblemDetails;
+FluentValidation wired through a custom filter (D013, no validators yet);
+environment-based console logging (D014); OpenAPI document in Development
+(D012); an integration test project exercising `/health` against the real
+database; an EF Core package-version conflict found and fixed (D015). One
+process note: an AI edit briefly broke `Raqam.Infrastructure.csproj` by
+editing a stale local copy; caught and corrected within the session (see the
+mistake entry above). Controllers over minimal APIs (D010) carried over from
+M0.
+
+**Verification:** all user-confirmed via shared command output — build,
+`/health`, `/openapi/v1.json`, `dotnet test` (1/1 passing), and `git status`.
+
+**Not done:** anything in M2. The two open decisions (auth transport, public
+registration) have not been discussed with the user yet.
+
+**Next:** discuss and record the M2 Part 0 decisions, then add ASP.NET Core
+Identity.

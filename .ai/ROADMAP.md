@@ -46,7 +46,15 @@ those.
 were good and that the repository is pushed to GitHub. Completion rests on
 that confirmation; the AI did not see the command output.
 
-## [~] M1 — Architecture foundation
+**M1 completed 2026-11-11 (session 4):** EF Core + Npgsql wired up, initial
+migration applied, `/health` with a database check, global exception
+handling, FluentValidation wiring (no validators yet), environment-based
+console logging, OpenAPI document in Development, and an integration test
+project — all verified by output the user shared, with one real mid-session
+mistake (an AI edit briefly broke `Raqam.Infrastructure.csproj`; caught and
+fixed the same session; see `.ai/PROGRESS.md`).
+
+## [x] M1 — Architecture foundation
 
 **Objective:** the API talks to PostgreSQL with production-shaped plumbing.
 
@@ -60,7 +68,7 @@ migrations apply cleanly; a basic integration test passes.
 **Manual actions:** local PostgreSQL (native or Podman) available with
 credentials supplied by the user.
 
-## [ ] M2 — Authentication and security
+## [~] M2 — Authentication and security
 
 **Objective:** secure single-user sign-in with 2FA and owner scoping.
 
@@ -184,5 +192,5 @@ Action Rule.
 
 ## Current milestone
 
-**M1 — Architecture foundation** (in progress; nothing implemented yet).
+**M2 — Authentication and security** (starting; nothing implemented yet).
 Detailed checklist: `TASKS.md`.

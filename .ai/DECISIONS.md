@@ -223,3 +223,50 @@ decision, just a package add.
 
 **Consequence:** Nothing is exposed outside Development. No Swagger UI exists
 yet — only the raw JSON document — until/unless a UI package is added.
+
+## 2026-11-11 — D013: FluentValidation with a custom action filter, not an automatic-integration package
+
+**Status:** Active. Source: session 4 (M1 Part 2).
+
+**Decision:** Use `FluentValidation` with `FluentValidation.DependencyInjectionExtensions`
+for validators, and a small hand-written `ValidationFilter` (`IAsyncActionFilter`
+in `Raqam.Api/Validation`) that resolves `IValidator<T>` for each action
+argument and turns failures into the standard `ValidationProblemDetails`
+shape. Registered globally via `AddControllers(options =>
+options.Filters.Add<ValidationFilter>())` and `AddValidatorsFromAssemblyContaining<Program>()`.
+
+**Why:** FluentValidation's own automatic ASP.NET Core MVC integration package
+was deprecated upstream; a ~25-line filter is simpler than adopting a
+third-party replacement, and keeps the error shape consistent with
+`[ApiController]`'s existing model-binding validation.
+
+**Alternatives considered:** `FluentValidation.AspNetCore` — deprecated, not
+used. Data annotations alone — rejected as less expressive for the
+cross-field rules the spec requires (e.g. transfer source ≠ destination).
+A third-party automatic-validation package — an extra dependency for
+something this small.
+
+**Consequence:** No validators exist yet (no request DTOs exist before Phase
+3). When DTOs move to `Raqam.Application`, change
+`AddValidatorsFromAssemblyContaining<Program>()` to also scan that assembly's
+marker type.
+
+## 2026-11-11 — D014: Built-in console logging, no logging package
+
+**Status:** Active. Source: session 4 (M1 Part 2).
+
+**Decision:** Use the ASP.NET Core SDK's built-in console logging providers —
+`AddSimpleConsole` (single-line, timestamped) in Development, `AddJsonConsole`
+otherwise. No Serilog or other third-party logging package.
+
+**Why:** Meets spec §11 Phase 1's "establish logging" and rule 15 (no secrets
+in logs — nothing here logs request bodies) without adding a dependency.
+JSON lines are easy for Render or any log collector to parse once hosted.
+
+**Alternatives considered:** Serilog with sinks — more capable (structured
+properties, sinks to external services) but unneeded at this size; revisit if
+a hosted log aggregator is adopted in M10.
+
+**Consequence:** Log format changes by environment. If a specific field
+format or external sink is needed later, this decision is revisited, not
+silently changed.

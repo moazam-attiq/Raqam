@@ -32,7 +32,8 @@ public class BalanceTests(ApiFactory factory)
     {
         var cash = await _user.CreateAccountAsync("Mixed cash", 1000m);
         var bank = await _user.CreateAccountAsync("Mixed bank", 5000.50m, AccountType.BankAccount);
-        var wallet = await _user.CreateAccountAsync("Mixed wallet", -200m, AccountType.DigitalWallet);
+        // Opened with enough to cover the 1000 transfer out of it below: no account may go below zero (D049).
+        var wallet = await _user.CreateAccountAsync("Mixed wallet", 1000m, AccountType.DigitalWallet);
         var salary = await _user.CreateCategoryAsync("Mixed salary", CategoryType.Income);
         var food = await _user.CreateCategoryAsync("Mixed food", CategoryType.Expense);
         var rent = await _user.CreateCategoryAsync("Mixed rent", CategoryType.Expense);
@@ -109,7 +110,8 @@ public class BalanceTests(ApiFactory factory)
     public async Task Ledger_totals_exclude_transfers()
     {
         // 2001 keeps these rows apart from every other test's dates.
-        var x = await _user.CreateAccountAsync("Totals X", 0m);
+        // Opened with enough to cover the 5000 transfer out of it below (D049).
+        var x = await _user.CreateAccountAsync("Totals X", 5000m);
         var y = await _user.CreateAccountAsync("Totals Y", 0m);
         var pay = await _user.CreateCategoryAsync("Totals pay", CategoryType.Income);
         var spend = await _user.CreateCategoryAsync("Totals spend", CategoryType.Expense);

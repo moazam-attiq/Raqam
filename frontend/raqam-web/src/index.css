@@ -1,1 +1,207 @@
 @import "tailwindcss";
+@import "@fontsource-variable/ibm-plex-sans/wght.css";
+@import "@fontsource-variable/reem-kufi/wght.css";
+@import "react-day-picker/style.css";
+@import "dynaura/styles-no-font.css";
+
+/* Dark mode is driven by a `dark` class on <html> (see src/lib/theme.ts), not the OS
+   setting alone, so the user's light / dark / system choice is respected. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/*
+ * Raqam brand tokens (D042). Lapis blue and gold: the blue of illuminated ledgers and
+ * manuscripts, with gold reserved for the mark and the current-page marker. Components use
+ * the semantic names below (bg-surface, text-muted, bg-brand ...), never raw colours, so
+ * light and dark come from this file alone. Every text pair here is at least 4.5:1.
+ */
+:root {
+  color-scheme: light;
+
+  --canvas: #f3f4f8;
+  --surface: #ffffff;
+  --sunken: #e9ecf4;
+  --line: #dde0ec;
+  --fg: #141a38;
+  --muted: #566086;
+  --subtle: #6b7497;
+
+  --brand: #26398f;
+  --brand-hover: #1c2c75;
+  --on-brand: #ffffff;
+  --brand-soft: #e3e8fa;
+  --brand-soft-fg: #1f2f7a;
+  --focus: #3b52c4;
+
+  --income: #16734c;
+  --income-soft: #daf2e5;
+  --expense: #b0352a;
+  --expense-soft: #fae1dd;
+  --transfer: #1f5e9e;
+  --transfer-soft: #dcebfa;
+  --warn: #7a4e00;
+  --warn-soft: #fbebc6;
+  --danger: #b3321f;
+  --danger-hover: #962818;
+  --on-danger: #ffffff;
+
+  /* The sidebar is the same deep lapis in both themes: the binding of the book. */
+  --side: #1b2870;
+  --side-fg: #eef0ff;
+  --side-muted: #b4bdeb;
+  --side-hover: rgb(255 255 255 / 0.08);
+  --side-active: rgb(255 255 255 / 0.14);
+  --side-line: rgb(255 255 255 / 0.16);
+  --gold: #e3a52b;
+
+  /* Toasts are a dark island in both themes (dynaura). */
+  --toast-bg: #1b2870;
+  --toast-fg: #eef0ff;
+  --toast-muted: #b4bdeb;
+
+  --scrim: rgb(14 20 56 / 0.5);
+  --shadow-overlay: 0 18px 48px -12px rgb(20 26 56 / 0.35);
+}
+
+.dark {
+  color-scheme: dark;
+
+  --canvas: #0b0e21;
+  --surface: #141936;
+  --sunken: #0f1330;
+  --line: #262d55;
+  --fg: #eceef9;
+  --muted: #a4abcf;
+  --subtle: #8189b0;
+
+  --brand: #8fa3ff;
+  --brand-hover: #aab9ff;
+  --on-brand: #0b0e21;
+  --brand-soft: #1f2755;
+  --brand-soft-fg: #bfcaff;
+  --focus: #8fa3ff;
+
+  --income: #52d6a0;
+  --income-soft: #10372b;
+  --expense: #ff937f;
+  --expense-soft: #41191b;
+  --transfer: #7cb8f5;
+  --transfer-soft: #14304f;
+  --warn: #f2c25e;
+  --warn-soft: #3a2c0b;
+  --danger: #ff937f;
+  --danger-hover: #ffab9a;
+  --on-danger: #1a0a08;
+
+  --side: #080b1a;
+  --side-fg: #eceef9;
+  --side-muted: #98a0c8;
+  --side-hover: rgb(255 255 255 / 0.06);
+  --side-active: rgb(143 163 255 / 0.16);
+  --side-line: #1b2145;
+  --gold: #f0b84a;
+
+  --toast-bg: #232b63;
+  --toast-fg: #eceef9;
+  --toast-muted: #a4abcf;
+
+  --scrim: rgb(4 6 18 / 0.65);
+  --shadow-overlay: 0 18px 48px -12px rgb(0 0 0 / 0.7);
+}
+
+@theme inline {
+  --font-sans: "IBM Plex Sans Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-brand: "Reem Kufi Variable", "IBM Plex Sans Variable", sans-serif;
+
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-sunken: var(--sunken);
+  --color-line: var(--line);
+  --color-fg: var(--fg);
+  --color-muted: var(--muted);
+  --color-subtle: var(--subtle);
+
+  --color-brand: var(--brand);
+  --color-brand-hover: var(--brand-hover);
+  --color-on-brand: var(--on-brand);
+  --color-brand-soft: var(--brand-soft);
+  --color-brand-soft-fg: var(--brand-soft-fg);
+  --color-focus: var(--focus);
+
+  --color-income: var(--income);
+  --color-income-soft: var(--income-soft);
+  --color-expense: var(--expense);
+  --color-expense-soft: var(--expense-soft);
+  --color-transfer: var(--transfer);
+  --color-transfer-soft: var(--transfer-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --color-danger: var(--danger);
+  --color-danger-hover: var(--danger-hover);
+  --color-on-danger: var(--on-danger);
+
+  --color-side: var(--side);
+  --color-side-fg: var(--side-fg);
+  --color-side-muted: var(--side-muted);
+  --color-side-hover: var(--side-hover);
+  --color-side-active: var(--side-active);
+  --color-side-line: var(--side-line);
+  --color-gold: var(--gold);
+
+  --color-scrim: var(--scrim);
+  --shadow-overlay: var(--shadow-overlay);
+}
+
+@layer base {
+  body {
+    @apply bg-canvas font-sans text-fg antialiased;
+  }
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+  /* One focus ring for the whole app, visible in both themes. */
+  :focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+  ::selection {
+    background: var(--brand-soft);
+    color: var(--brand-soft-fg);
+  }
+}
+
+/* Money and dates line up in columns. */
+@utility num {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Calendar (react-day-picker) follows the brand in both themes. */
+.rdp-root {
+  --rdp-accent-color: var(--brand);
+  --rdp-accent-background-color: var(--brand-soft);
+  --rdp-disabled-opacity: 0.35;
+}
+
+/* The chosen day is a solid circle. Today, when it is not the chosen day, is bold with a ring and a soft fill, so the two never look alike. */
+.rdp-selected .rdp-day_button {
+  font-weight: 700;
+  border: 2px solid var(--brand);
+  background: var(--brand);
+  color: var(--on-brand);
+}
+.rdp-today:not(.rdp-outside):not(.rdp-selected) .rdp-day_button {
+  font-weight: 700;
+  border: 2px solid var(--brand);
+  background: var(--brand-soft);
+}
+/* Days that cannot be chosen (after the latest allowed date). */
+.rdp-disabled .rdp-day_button {
+  cursor: not-allowed;
+}
+
+/* Toasts use the app font (no request to Google Fonts). */
+.dynaura-root {
+  --dynaura-font: "IBM Plex Sans Variable", ui-sans-serif, system-ui, sans-serif;
+}

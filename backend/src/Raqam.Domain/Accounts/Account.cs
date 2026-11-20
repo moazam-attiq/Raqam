@@ -26,7 +26,7 @@ public class Account
     public string Name { get; private set; } = null!;
     public AccountType AccountType { get; private set; }
 
-    /// <summary>May be zero or negative; editable at any time (D031).</summary>
+    /// <summary>Zero or more; editable at any time (D031). A negative opening balance is no longer allowed (D049).</summary>
     public decimal OpeningBalance { get; private set; }
 
     public string CurrencyCode { get; private set; } = DefaultCurrencyCode;
@@ -70,10 +70,16 @@ public class Account
         string? institutionName,
         DateTime utcNow)
     {
-        Name = Guard.RequiredText(name, NameMaxLength, "Account name");
-        AccountType = EnsureDefined(accountType);
-        OpeningBalance = MoneyRules.EnsureValidBalance(openingBalance);
-        InstitutionName = Guard.OptionalText(institutionName, InstitutionNameMaxLength, "Institution name");
+        // Validate everything before assigning anything, so a rejected edit leaves the account unchanged.
+        var validName = Guard.RequiredText(name, NameMaxLength, "Account name");
+        var validType = EnsureDefined(accountType);
+        var validBalance = MoneyRules.EnsureValidBalance(openingBalance);
+        var validInstitution = Guard.OptionalText(institutionName, InstitutionNameMaxLength, "Institution name");
+
+        Name = validName;
+        AccountType = validType;
+        OpeningBalance = validBalance;
+        InstitutionName = validInstitution;
         UpdatedAtUtc = utcNow;
     }
 
@@ -89,6 +95,13 @@ public class Account
         IsArchived = true;
         UpdatedAtUtc = utcNow;
     }
+
+    /// <summary>
+    /// Records that something able to lower this account's balance is being saved with it.
+    /// The changed row makes a second, simultaneous change to the same account fail with a
+    /// conflict instead of both passing the "not below zero" check against the same balance (D049).
+    /// </summary>
+    public void Touch(DateTime utcNow) => UpdatedAtUtc = utcNow;
 
     private static AccountType EnsureDefined(AccountType accountType)
     {

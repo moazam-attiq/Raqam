@@ -92,6 +92,18 @@ public class TransactionRepository(RaqamDbContext db) : ITransactionRepository
         return movements ?? AccountMovements.None;
     }
 
+    public async Task<IReadOnlyList<CategoryTotal>> GetExpenseTotalsByCategoryAsync(
+        Guid userId, DateOnly from, DateOnly to, CancellationToken cancellationToken) =>
+        await db.Transactions
+            .AsNoTracking()
+            .Where(t => t.UserId == userId
+                && t.Type == TransactionType.Expense
+                && t.TransactionDate >= from
+                && t.TransactionDate <= to)
+            .GroupBy(t => t.CategoryId!.Value)
+            .Select(g => new CategoryTotal(g.Key, g.Sum(t => t.Amount)))
+            .ToListAsync(cancellationToken);
+
     public async Task<IncomeExpenseTotals> GetTotalsAsync(
         Guid userId, DateOnly? from, DateOnly? to, Guid? accountId, CancellationToken cancellationToken)
     {
@@ -119,6 +131,25 @@ public class TransactionRepository(RaqamDbContext db) : ITransactionRepository
             .SingleOrDefaultAsync(cancellationToken);
 
         return totals ?? IncomeExpenseTotals.None;
+    }
+
+    public async Task<IReadOnlyList<MonthlyTotal>> GetMonthlyTotalsAsync(
+        Guid userId, DateOnly from, DateOnly to, CancellationToken cancellationToken)
+    {
+        // Transfers are neither income nor expense (rule 3). One grouped query, never rows in memory.
+        return await db.Transactions
+            .AsNoTracking()
+            .Where(t => t.UserId == userId
+                && t.Type != TransactionType.Transfer
+                && t.TransactionDate >= from
+                && t.TransactionDate <= to)
+            .GroupBy(t => new { t.TransactionDate.Year, t.TransactionDate.Month })
+            .Select(g => new MonthlyTotal(
+                g.Key.Year,
+                g.Key.Month,
+                g.Sum(t => t.Type == TransactionType.Income ? t.Amount : 0m),
+                g.Sum(t => t.Type == TransactionType.Expense ? t.Amount : 0m)))
+            .ToListAsync(cancellationToken);
     }
 
     public void Add(Transaction transaction) => db.Transactions.Add(transaction);

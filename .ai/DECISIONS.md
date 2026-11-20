@@ -757,3 +757,608 @@ category filter (surprising for parent categories).
 `GET /accounts/{id}/balance?asOf=` and `GET /accounts/{id}/transactions`; the
 ledger-totals endpoint is M5 (dashboard), so for now totals are exercised by
 tests only.
+
+## 2026-11-11 — D037: Frontend reaches the API through the Vite dev proxy
+
+**Status:** Active. Source: session 6 (M4 Part 0); applies D016, D018.
+
+**Decision:** In local development the browser calls the Vite dev server
+(`http://localhost:5173`) at `/api/...`, and Vite forwards to the API at
+`https://localhost:7271` (`secure: false` for the self-signed dev certificate).
+The frontend reads the API base from `VITE_API_BASE_URL`, which is `/api/v1` in
+development; a hosted build sets the full API URL. Every request sends
+credentials, and unsafe verbs send the `X-CSRF-TOKEN` header (token fetched from
+`/auth/csrf-token` after sign-in, D018).
+
+**Why:** the browser sees one origin, so there is no CORS to configure locally
+and the cookie is set for the origin the user is actually on. This also avoids
+making the browser trust the dev certificate for a second origin.
+
+**Alternatives considered:** direct calls to `https://localhost:7271` with
+`Cors:AllowedOrigins` (D016) — works, but relies on cross-origin `SameSite=None;
+Secure` cookies and certificate trust in the browser, which is more fragile.
+
+**Consequence:** the API must be run with the `https` launch profile while
+developing the frontend. The auth cookie is `Secure` but is served to the browser
+over `http://localhost`; Chrome and Firefox accept that for `localhost`, Safari
+may not — if sign-in does not stick in Safari, use Chrome or Firefox for
+development. The `.env.example` default changes from `http://localhost:5196/api/v1`
+to `/api/v1`. Production CORS (`Cors:AllowedOrigins`) is unchanged and is still
+needed when the frontend and API are on different domains (M10).
+
+## 2026-11-11 — D038: UI components are Tailwind plus Radix UI primitives
+
+**Status:** Active. Source: session 6 (M4 Part 0); realizes spec §5.2 "a small,
+consistent component system" and §3.14.
+
+**Decision:** Interactive widgets that are hard to make accessible by hand
+(dialogs, confirm dialogs, dropdown menus, selects, tooltips, toasts where
+needed) use Radix UI primitives, styled with Tailwind. Simple elements (button,
+input, card, badge, table, form field) are written in the repo. All shared
+components live in `src/components/ui/` and are the only place Radix is imported.
+Each Radix package is added in the slice that first needs it, not up front.
+
+**Why:** correct focus handling, keyboard navigation and ARIA for dialogs and
+menus is easy to get subtly wrong; Radix supplies it unstyled, so the look stays
+ours (spec §3.14: accessible labels and keyboard navigation).
+
+**Alternatives considered:** hand-built set with native `<dialog>` and selects —
+fewest dependencies, but more accessibility work to own (this was the
+recommended option; the user chose Radix instead).
+
+**Consequence:** a few more dependencies to keep updated; wrapping Radix in
+`components/ui` keeps the rest of the app independent of it.
+
+## 2026-11-11 — D039: Frontend tests use Vitest and Testing Library, in M4
+
+**Status:** Active. Source: session 6 (M4 Part 0); spec §10.3.
+
+**Decision:** M4 includes frontend tests: Vitest with jsdom, `@testing-library/react`
+and `@testing-library/user-event`. They cover form validation and API-error
+display, the sign-in and 2FA flow, transaction create/edit, theme persistence,
+and key loading/empty/error states. API calls are mocked at the API-client
+boundary; a mock-server library (MSW) is added only if that proves awkward. Tests
+are written with each slice, and `npm test` must pass with `npm run build` and
+`npm run lint`.
+
+**Why:** the UI renders money and sends it to a ledger that is correct by test;
+untested forms are where wrong amounts or silently swallowed errors would
+appear. The spec lists these tests under §10.3.
+
+**Alternatives considered:** deferring tests to a later milestone — rejected
+because UI drift is harder to cover afterwards.
+
+**Consequence:** the verification list for M4 includes `npm test` output shared
+by the user. Import preview UX and end-to-end tests (§10.3/§10.4) belong to their
+own milestones.
+
+## 2026-11-11 — D040: Frontend conventions
+
+**Status:** Active. Source: session 6 (M4 Part 0); decided by the AI as sensible
+defaults, change if you disagree.
+
+**Decision:**
+- **Layout:** `src/features/{auth,accounts,categories,transactions,dashboard}`
+  each with its pages, components, API calls and query hooks; shared code in
+  `src/lib` (API client, money, dates), `src/components` (layout, `ui/`).
+- **Server state:** TanStack Query for everything from the API; a mutation
+  invalidates the affected queries. Sign-in state comes from `GET /auth/me`; a
+  `401` anywhere returns the user to the sign-in screen.
+- **Forms:** React Hook Form with Zod schemas that mirror the backend rules
+  (amount greater than 0, at most 2 decimals, maximum, name lengths). The server
+  stays the authority: a `400` is mapped onto field errors, a `409` shows a
+  "changed elsewhere, reload" message and refetches, a `404` shows not found.
+  The exact error body shape is confirmed against a real response in Part 1.
+- **Money and dates:** amounts are held as strings in forms and sent as JSON
+  numbers; never rounded on the client (D030). Dates are `YYYY-MM-DD` strings
+  and are never passed through `Date` timezone conversion (D022). One helper
+  formats PKR (`Intl.NumberFormat` with `en-PK` / `PKR`) and one formats dates.
+- **Theme:** follows the system setting by default, with a light / dark / system
+  toggle saved in `localStorage` (`raqam-theme`), applied as a class on `<html>`
+  (Tailwind dark variant).
+- **Destructive actions:** always confirmed in a dialog (spec §3.14); archiving
+  a parent category warns that its subcategories are archived too.
+- **Scope:** the dashboard in M4 is layout only (balances summary and recent
+  transactions from existing endpoints); budgets and analytics are M5.
+
+**Consequence:** later milestones add feature folders in the same shape.
+
+## 2026-11-11 — D041: Dates use dayjs and display as "18 May 2026"
+
+**Status:** Active. Source: session 6 (M4 Part 0), user instruction; refines D040
+(money and dates) and applies D022.
+
+**Decision:**
+- All date handling in the frontend goes through **dayjs** (with the `utc` and
+  `customParseFormat` plugins), in one helper module in `src/lib`.
+- Every date the user sees, anywhere (lists, forms, filters, dashboard, dialogs),
+  is formatted **`D MMM YYYY`**, for example `18 May 2026`. A timestamp, where one
+  is shown at all, is `D MMM YYYY, h:mm A` in the user's local time.
+- The **wire format stays `YYYY-MM-DD`** (the API's plain date, D022), and so do
+  URL query parameters for shareable filters. Display formatting never changes
+  what is sent.
+- A transaction date is parsed and formatted as a local calendar date and is never
+  converted through UTC, so it cannot shift by a day (spec rule 8). Only the
+  `...Utc` timestamps are parsed as UTC and shown in local time.
+- Date inputs are not the browser's native `<input type="date">` (its display
+  format follows the browser locale and cannot be set). A date field is a button
+  that shows `18 May 2026` and opens a calendar popover (`react-day-picker`
+  inside a Radix popover, D038); the user can also type the date in that format.
+
+**Why:** the user wants one consistent, unambiguous format everywhere; month
+names avoid the day/month confusion of numeric formats; dayjs keeps date logic in
+one small library instead of ad hoc string and `Date` handling.
+
+**Alternatives considered:** native date inputs — simplest and most accessible on
+mobile, but impossible to show in this format (not chosen because of the
+"everywhere" requirement); `date-fns` or `Intl.DateTimeFormat` alone — fine, but
+dayjs was asked for.
+
+**Consequence:** two more dependencies, `dayjs` and `react-day-picker` (the
+Radix popover is added with the first date field). The date picker is a component
+the tests must cover (typing, picking, keyboard). If the custom picker proves
+poor on phones, revisit by appending a new decision.
+
+## 2026-11-20 — D042: Brand identity: lapis and gold, semantic colour tokens
+
+**Decision:** the app has one visual identity, defined once in `src/index.css`.
+- Palette: lapis blue (`#26398F`, lighter `#8FA3FF` in dark) for actions and links; gold
+  (`#E3A52B` / `#F0B84A` in dark) only for the mark and the current-page marker; cool paper
+  and deep-ink surfaces for light and dark; green, red and blue only for income, expense
+  and transfer (and errors), never for decoration.
+- Components use semantic Tailwind names (`bg-surface`, `text-muted`, `bg-brand`,
+  `bg-side` ...) backed by CSS variables, so light and dark come from one file and
+  components carry no `dark:` variants. Changing the brand later means editing the
+  variable values only.
+- The sidebar is the same deep lapis in both themes (the binding of the book); on mobile
+  it becomes a lapis top bar.
+- Type: IBM Plex Sans (variable) for everything, with tabular figures for money and dates
+  (the `num` utility); the Arabic word رقم in Reem Kufi (variable) is the wordmark.
+- Cards are flat and outlined (no shadows); only overlays (dialogs, calendar, toasts) get a
+  shadow. Table headers are sentence case, not capitals. One focus ring for the whole app.
+- Every text pair was checked against WCAG AA (4.5:1) in both themes.
+
+**Why:** the first pass used default slate and indigo, which read as a template with no
+identity. A finance app is read for numbers, so the brand lives in the frame (sidebar and
+wordmark) and in disciplined colour use, and the content stays quiet.
+
+**Alternatives considered:** a teal or green brand (the common finance default); a warm
+cream and terracotta look; a gradient or illustrated look. Not chosen: each is the usual
+choice for this kind of app rather than one that fits the name.
+
+**Consequence:** two new dependencies, `@fontsource-variable/ibm-plex-sans` and
+`@fontsource-variable/reem-kufi`; fonts are bundled, so no external font requests. The
+favicon is replaced with a gold ring on lapis. The theme toggle is styled for the sidebar
+and would need a variant if it moves onto a plain page.
+
+**Amendment (same day): icons.** Buttons carry an icon with their text when the action
+benefits from it (New, Save, Archive, Delete, Try again), navigation items have icons, and
+row actions (edit, archive, delete) use the icon-only `IconButton`, which requires a label
+(used as the accessible name and the tooltip). The theme toggle is three icons (sun, moon,
+monitor) with labels for screen readers. Icons come from `lucide-react` (one new
+dependency, tree-shaken). Dialog buttons stay text-only so the choice reads as words.
+
+## 2026-11-20 — D043: Sign-in screens, session handling and 2FA scope
+
+**Decision:**
+- The signed-in user is held in the TanStack Query cache under `['session']` (user, or null
+  when signed out), loaded from `GET /auth/me` (a 401 there means "not signed in", not an
+  error). A route guard (`RequireAuth`) wraps every app page and sends anyone else to
+  `/sign-in`, remembering the page they asked for; the sign-in screen sends a signed-in
+  person away.
+- The API answers every sign-in step with 200 and `{ succeeded, requiresTwoFactor,
+  lockedOut }`, so the screen reads those flags: wrong credentials say "Email or password
+  is incorrect" (never which one), a locked account says so, `429` says to wait.
+- The 2FA step takes the 6-digit authenticator code (spaces allowed, sent as plain digits)
+  or a recovery code, via `/auth/two-factor/verify` and `/auth/two-factor/recovery-code`.
+  Both and `/auth/login` are sent without a CSRF header (the API exempts them, D018); the
+  CSRF token is reset after sign-in and sign-out.
+- Any 401 from any other request clears the cached user, so the guard returns the person
+  to sign-in; sign-out clears the whole cache.
+- If sign-in succeeds but `/auth/me` still answers 401, the screen says the browser did not
+  keep the session cookie and points at HTTPS: this is the Safari risk recorded in D037.
+- The 2FA setup and disable screen is deferred to a later settings page. It is optional for
+  M4's exit criteria, and 2FA can already be turned on through the API.
+
+**Why:** one place for "who is signed in" that every request path can clear keeps the guard,
+the 401 rule and sign-out consistent, and avoids a second auth store beside Query.
+
+**Consequence:** `SESSION_QUERY_KEY` lives in `src/lib/query-client.ts`; tests use
+`src/test/api-mock.ts` and `render-app.tsx`. A user who enabled 2FA has no way to see or
+change it in the UI until the settings page exists.
+
+**Amendment 2 (same day): navbar and toasts.** The theme toggle, the signed-in email and
+Sign out moved out of the sidebar into a navbar across the top of the content area; the
+sidebar is navigation only. Below the `md` width the lapis top bar carries the wordmark, the
+theme toggle and the menu button, and the menu panel holds navigation, the email and Sign
+out. Toasts are shown by `dynaura` (small "island" toasts at the top of the screen): the
+`useToast().notify(message, tone)` call is unchanged, so screens do not import the library.
+Toast colours are CSS variables (`--toast-bg` and friends), so they follow light and dark;
+the stylesheet without the Google Fonts import is used and the app font is set instead.
+One new dependency, `dynaura`.
+
+
+---
+
+## 2026-11-20 — D044: Accounts screens
+
+**Decision:**
+- `/accounts` lists accounts with their type and balance. Each balance comes from
+  `GET /accounts/{id}/balance` (one request per account, shown as a placeholder until it
+  arrives, "—" if it fails), because the list response carries no balance (ledger-first,
+  spec §6.4). Archived accounts are hidden unless "Show archived accounts" is ticked, and
+  are labelled and read-only when shown.
+- Create and edit share one dialog. The form checks the same rules as the API (name 1–100
+  characters, a type, an opening balance of at most 2 decimals, which may be negative, and an
+  optional institution of at most 100 characters) and never rounds. Server `400` messages are
+  placed under the field they name; other errors show above the buttons.
+- Edit sends the `version` the form was opened with. On `409` the dialog offers "Load
+  latest": it fetches the account again, replaces the form's values and version, and the
+  person saves again. Nothing is overwritten silently.
+- Archiving always asks first (it cannot be undone). The detail page `/accounts/:id` shows
+  the balance and its parts (opening, income, expenses, transfers in and out) and a paged
+  history (`GET /accounts/{id}/transactions`, 20 a page). In the history each amount is
+  signed by its effect on this account: a transfer is "Transfer out" or "Transfer in"
+  depending on which side this account is.
+- A missing or foreign account shows "Account not found" (the API answers 404 for both).
+- Below the `sm` width the Type column is dropped and the type is shown under the name, so
+  nothing is clipped on a phone.
+
+**Why:** the list needs no new endpoint, and reloading the latest values on a conflict is
+the least surprising recovery. Reusing one dialog keeps create and edit rules from drifting.
+
+**Consequence:** one request per account for balances; fine for a personal account list. New
+shared pieces: `Select` and `Pagination` (reused by transactions in Part 5), and
+`features/transactions/types.ts` holds the `Transaction` and `Paged` shapes. Account data is
+refetched as a whole after any create, edit or archive. `render-app.tsx` now mounts
+`ToastProvider`, like the real app.
+
+---
+
+## 2026-11-20 — D045: Categories screens, and how a 409 is told apart
+
+**Decision:**
+- `/categories` shows one type at a time (Expenses or Income, a two-way switch), as a tree:
+  top-level categories with their subcategories nested below, each sorted by name. Archived
+  ones are hidden unless "Show archived categories" is ticked, and are labelled and
+  read-only when shown. All categories load in one request and are grouped in the browser.
+  A subcategory whose parent is missing from the list is shown at top level, never dropped.
+- Create: name, type, an optional parent (only top-level, unarchived categories of the chosen
+  type are offered; changing the type clears the parent) and an optional colour. "Add
+  subcategory" on a top-level row opens the same dialog with the parent fixed, which also
+  fixes the type. Subcategories of subcategories are not offered (D028).
+- Edit changes name and colour only; type and parent are shown as text because the API fixes
+  them after creation (D028). The stored icon is sent back unchanged.
+- Colour is one of nine fixed swatches or none, stored as a hex string (the API accepts up to
+  20 characters of free text). A colour already stored that is not a swatch stays selectable
+  as "Current colour". The icon field has no editor yet: the seeded defaults have no icon or
+  colour, and the spec calls both optional metadata.
+- Archive always asks, and when the category has unarchived subcategories the dialog says they
+  are archived with it (D028, the API does this in one save).
+- **A 409 has two causes with no code to tell them apart:** a stale version, and a name that
+  is already taken. When an edit gets a 409, the dialog fetches the record again; only if its
+  version differs does it offer "Load latest". Otherwise it shows the server's message and
+  keeps what the person typed. No message text is matched.
+
+**Correction to D044:** the accounts dialog treated every 409 on an edit as stale, and its
+test used an invented 400 for a duplicate name. Account names are unique per user, and the
+API answers a taken name with 409. Duplicate names on an account edit would have offered
+"Load latest", which replaces the typed name. The accounts dialog now uses the same check
+(`versionHasMoved` in `src/lib/api/conflict.ts`) and its tests cover the real 409 on create
+and on edit.
+
+**Why:** the API's two 409 messages are plain text under the same status and title;
+matching them would break when a message is reworded, and always offering a reload would
+discard a person's edit for a simple name clash.
+
+**Consequence:** one extra GET after a 409 on an edit. The icon cannot be set from the UI until
+a later pass chooses an icon set. Transactions (Part 5) will reuse the same check.
+
+---
+
+## 2026-11-20 — D046: Transactions screens
+
+**Decision:**
+- **List and filters.** `/transactions` shows the signed-in user's transactions, 20 to a page.
+  Filters, sort and page live in the address, so a filtered view can be reloaded or shared:
+  `from`, `to` (`YYYY-MM-DD`), `type`, `account`, `category`, `q` (search), `sort`, `page`.
+  Anything at its default is left out; anything invalid in a link (a bad date, an id that is
+  not a UUID, an unknown sort) is ignored rather than sent to the API. Changing a filter goes
+  back to page 1. Filter changes replace the history entry, so Back does not step through
+  every keystroke. Search waits 300 ms after typing stops. Sort offers newest first (the
+  default), oldest first, highest amount and lowest amount, the API's four orders.
+- **Date range.** An end date before the start date is not sent (the API would answer 400);
+  the screen says so under the dates.
+- **Names.** Rows show account and category names resolved from the account and category
+  lists, which are loaded including archived ones, since history can point at them. A
+  subcategory shows as "Food › Groceries". A transfer shows "From → To". Amounts are signed:
+  income "+" in the income colour, expense "−" in the expense colour, a transfer plain.
+- **Category filter** offers every category (expense, then income), including archived; a
+  top-level category also matches its subcategories, as the API does (D036).
+- **Form.** One dialog for new and edit. A three-way switch (Expense, Income, Transfer) decides
+  the fields: income and expense take one account, a category of the matching type and an
+  optional merchant; a transfer takes a From and a To account (the To list leaves out the From
+  account) and has no category. Changing the type clears the category and the To account. The
+  amount is positive with up to 2 decimals and is never rounded (D030); the date defaults to
+  today and is shown as `D MMM YYYY` (D041).
+- **Archived accounts and categories.** A new transaction offers only active ones; an edit
+  also keeps the account or category already on the transaction, labelled "(archived)", so an
+  old entry can still be edited. This mirrors the domain rule.
+- **Fast entry.** The amount has focus when the dialog opens and Enter saves. "Save and add
+  another" saves, keeps the dialog open, keeps type, date, account and category, and clears
+  amount, description and merchant. The account used last is remembered in the browser
+  (`raqam.lastAccountId` in local storage, best effort) and pre-selected; with exactly one
+  active account that one is pre-selected.
+- **Errors.** A `400` with field errors shows under the matching field; a rule message
+  (such as an archived category) shows above the buttons; a `404` for an account or category
+  that has gone shows its message. A `409` is checked with the same refetch-and-compare as D045
+  and offers "Load latest" when the version moved. A transaction has no unique name, so in
+  practice every `409` here is a stale edit; the check costs one request and keeps the rule
+  the same everywhere.
+- **Delete** asks first, naming the transaction, amount and date, and says balances will
+  change. Deleting the only row on a later page steps back one page.
+- **Phones.** Below the `md` width the Date, Category and Account columns are hidden and
+  their text moves under the description, so the amount and the row buttons stay on screen.
+  The filters other than search fold behind a "Filters" button that shows how many are
+  applied. Table cells use less side padding below `sm`, which also tightens the accounts
+  list and the account history.
+
+**Why:** the URL is the single source of truth for the view, which gives reload, sharing and
+the Back button for free and avoids a second copy of the filters in component state. Mirroring
+the domain's archived rule in the form avoids offering choices the API will reject.
+
+**Consequence:** any create, edit or delete refreshes the transaction lists and all account
+data (balances and histories), because balances are computed from the ledger (D006). The
+dashboard (Part 6) will need the same refresh. New shared pieces: `categoryOptions`
+(`features/categories/category-options.ts`), `parseFilters` and `toSearchParams`
+(`features/transactions/transaction-filters.ts`), and a `query` field on calls recorded by the
+test API mock. Not built: bulk actions, export, a time of day (D022).
+
+---
+
+## 2026-11-20 — D047: Dashboard layout
+
+**Decision:**
+- The dashboard (`/`) is layout only, built from endpoints that already exist; reports and
+  charts stay in M5. It has three parts: a **Total balance** card, an **Accounts** list, and
+  **Recent transactions** (the newest 8, the transactions page's default order), each with a
+  link to its full page. A "New transaction" button opens the same form as the transactions
+  page, and saving it refreshes the dashboard.
+- **The total** is the sum of the balances the server returns for each account
+  (`GET /accounts/{id}/balance`), added in whole paise (`sumMoney`) because adding the decimals
+  directly drifts (0.1 + 0.2). It includes archived accounts, because they keep their history
+  and their money (the archive message says so), and the card says "including N archived" when
+  there are any. If any balance has not loaded or failed, the card shows a note instead of a
+  partial total, since a wrong total is worse than none. There is no new server endpoint for it:
+  the app is single-currency (PKR), so a client-side sum of balances the server computed is
+  safe; a server total can replace it in M5 if reports need one.
+- The accounts list shows active accounts only, each linking to its page. Each section has its
+  own loading, empty and error state, so one failing request does not blank the page.
+- With no active account the page says "No accounts yet" and links to accounts; "New
+  transaction" is disabled until there is one.
+- Shared pieces extracted for both pages: `describeTransaction` (category and account text for
+  a row) and `TransactionAmount` (signed, coloured amount); the transactions list hook takes an
+  optional page size.
+
+**Why:** the checklist asks for balances and recent activity from existing endpoints only, and
+the dashboard should show the same numbers as the account pages.
+
+**Consequence:** the dashboard makes one request per account for balances plus one for the
+recent list; fine for a personal number of accounts. It depends on the account and transaction
+refresh that already happens after any change (D046), so no extra wiring is needed.
+
+## D048 — Quality pass: what an automated audit covered, and what it changed
+
+**Date:** 2026-11-20 **Status:** accepted (Part 7)
+
+**Context:** Part 7 asks for state, responsive, accessibility and theme checks. The AI cannot
+run a real browser session against the real API, so the audit ran on the built app (`vite
+preview`) in headless Chromium with the API stubbed at the network layer, using axe-core
+(WCAG 2.0/2.1/2.2 A and AA plus best practices).
+
+**Decision:**
+- **Audit scope.** axe on every page and dialog in light and dark (dashboard, accounts, account
+  detail, categories, transactions, all form and confirm dialogs, phone menu, sign-in), and again
+  on every page in its loading, empty and server-error state. Overflow measured at 390, 768, 1024
+  and 1440 px. Theme persistence, first-paint class and the system setting checked in a real
+  browser. Keyboard: tab order, focus ring, dialog focus in and out.
+- **Fixes made because of it:**
+  - Dialogs gave focus to the page top on close. Radix only restores focus to a `Trigger`, and
+    ours open from plain buttons. `useRestoreFocus(open)` records the opener in a layout effect
+    (not `onOpenAutoFocus`, which Radix skips when a field has `autoFocus`) and restores it;
+    if the opener is gone (a deleted row) focus goes to `main`, which is now `tabIndex={-1}`.
+  - At 768 px the sidebar leaves about 430 px, and the transactions table pushed Amount and the
+    row buttons out of view. Date, Category and Account now fold into the details line below `lg`.
+  - The visually hidden "Actions" header escaped the table's scroll wrapper and made the whole
+    page scroll sideways; the wrapper is now `relative`.
+  - Sign-in's brand panel sat outside any landmark; it is now a `header`.
+  - Loading placeholders had `aria-label` on a role-less `div` (ignored by screen readers); they
+    are now `role="status"`, and the account detail page announces its loading too.
+  - A failed or missing account on the detail page had no `h1`; it has a hidden "Account" one.
+- **Not claimed:** axe finds about a third of accessibility problems. It does not judge reading
+  order, wording, or how a screen reader actually sounds. Nothing here is a manual
+  screen-reader test, and nothing ran against the real API or on the user's machine.
+
+**Why:** the failures found (lost focus, hidden Amount column, silent loading) are the kind that
+tests with a stubbed DOM do not see.
+
+**Consequence:** the audit scripts are scratch files, not in the repo. If the user wants this
+repeatable, an axe check could be added as a Playwright test in M5 or later; that would add a
+dependency and a browser download, so it is not done now.
+
+## D049 — An account never goes below zero (reverses D031)
+
+**Date:** 2026-11-20 **Status:** accepted (user requirement, M4 walkthrough)
+
+**Context:** D031 allowed negative balances (overdraft). The user's walkthrough feedback: a
+transfer must not exceed what the account holds (1000 means at most 1000), and an account
+balance is always positive and never negative.
+
+**Decision:**
+- An account's current (all-time) balance never goes below zero. Exactly zero is allowed.
+- Enforced in the application layer by `BalanceGuard` on transaction create, edit and delete and
+  on opening-balance changes. Create guards the new effect; edit guards the reversal of the old
+  effect plus the new one; delete guards the reversal (deleting income that was already spent,
+  or a transfer that already left the destination, is refused; deleting an expense never is).
+  The refusal is a `DomainException` (400) naming the account and what it has available.
+- The guard also touches the account row (`Account.Touch`), so the xmin version changes and two
+  simultaneous spends on one account conflict (409) instead of both passing the check.
+- Opening balance must be 0 or more (domain `MoneyRules`, FluentValidation, and the form).
+- `Account.Update` validates all fields before assigning any, so a refused change leaves the
+  entity untouched.
+- Frontend mirrors the rule only as guidance: the form shows "Available: Rs X" for an expense or
+  transfer, takes the amount being edited back out of the balance first, and blocks a larger
+  amount. If the balance is unavailable the form checks nothing and the server decides.
+- Accounts already below zero are not locked out; only changes that lower them further are refused.
+
+**Known limits:** only the current balance is checked, not historical running balances, so a
+backdated expense can pass today and still leave an earlier day negative. No database constraint
+or migration was added (a CHECK cannot see the ledger, which computes balances).
+
+**Why:** the user's rule is about what an account holds now; the check belongs with the ledger
+rules in the application layer, like the other money rules.
+
+**Status of verification:** frontend 246 tests pass in the AI's workspace. The backend change
+is written and hand-reviewed but has not been compiled or run; it needs `dotnet test` from the user.
+
+## D050 — Transactions open on this month; no future dates in the filter
+
+**Date:** 2026-11-20 **Status:** accepted (user requirement, M4 walkthrough)
+
+**Decision:**
+- The list defaults to the 1st of the current month through today. Older entries are fetched
+  only when the user changes From (or clears filters to the default again).
+- From and To cannot be after today: the pickers grey out later days and the typed field refuses
+  them with "Choose <date> or earlier."; a future date in the URL is ignored and replaced by the
+  default for that side.
+- `from`/`to` are written to the URL only when either differs from the default, so a default view
+  has a clean URL and "Clear filters" and the "Filters (n)" count ignore the default dates.
+- The dashboard's latest-8 list stays unfiltered by date (it is "latest overall", not "this month").
+- Today is highlighted more strongly in the calendar (bold, 2px brand ring, soft fill); the
+  selected day is a solid brand circle, so the two stay distinguishable.
+- The calendar popover has `aria-label="Calendar"`, which fixed an axe `aria-dialog-name` finding.
+
+**Not decided:** a transaction itself can still be dated in the future (the server accepts it);
+the default `to = today` filter would hide it. Asked the user.
+
+## D051 — A transaction cannot be dated in the future (supersedes the "Not decided" note in D050)
+
+**Date:** 2026-11-20 **Status:** accepted (user requirement)
+
+**Decision:**
+- The server refuses a transaction date after the server's UTC today **plus one day**, on create
+  and on edit ("Transaction date cannot be in the future.", 400). The extra day is there because
+  the server only knows UTC: a person in Pakistan (UTC+5) is already on the next date for five
+  hours a day, and must still be able to record "today". The check lives in the domain
+  (`Transaction.Apply`, shared by create and update), so it applies however a transaction arrives.
+- The form's date field takes `maxDate` = the person's own today; a typed later date is refused
+  with "Choose <date> or earlier.", and the form's rule repeats that for a value that arrives
+  already late.
+- A transaction that is already saved with a future date (possible before this rule) can still be
+  listed and deleted, but cannot be saved again until its date is fixed.
+
+**Why:** the default list ends today (D050), so a future-dated entry would be saved and then hidden.
+
+**Known limit:** someone behind UTC (the Americas) can be accepted up to two days ahead of their own
+today by the server alone; the form still stops them at their own today. Nothing here is a
+database constraint.
+
+## D052 — Two-step verification gets a screen (supersedes the deferral in D043)
+
+**Date:** 2026-11-20 **Status:** accepted (user asked for it in scope)
+
+**Decision:**
+- New page `/security` ("Security" in the navigation) over the existing endpoints: `status`,
+  `setup`, `enable`, `disable`. No backend change.
+- Off: "Turn on" asks for the key (`setup`), shows a QR code and the key in groups of four, and
+  asks for the 6-digit code; `enable` with a valid code turns it on and returns the recovery
+  codes, which are shown once with "Copy codes" and "I have saved them". A wrong code shows the
+  server's message under the field and keeps the setup open.
+- On: "Turn off" asks first (confirm dialog), then calls `disable`.
+- The QR code is drawn from the `otpauth://` link by `uqr` (new dependency, no sub-dependencies),
+  as an SVG built from rects, not injected HTML. It is always dark on white in both themes so
+  scanners can read it.
+
+**Checked:** axe clean in every state in both themes; the rendered QR decodes back to the exact
+link; no horizontal overflow at 390 and 768 px. Not checked: a real authenticator app, or the
+real API.
+
+**Recommended, not done:** `disable` needs only a signed-in session, so anyone at an unlocked
+browser can turn 2FA off. Requiring a current code (or the password) to turn it off would close
+that; it is a backend change plus test, so it waits for a decision.
+
+## D053 — Budgets: one per owner, month and category; what counts as spending; alerts without a notification inbox
+
+**Date:** 2026-11-20 **Status:** accepted as the AI's defaults (the user asked to move on; they can change any of it)
+
+**Decision:**
+- **Model.** `Budget`: owner, year, month, amount (> 0, 2 decimals, `numeric(18,2)`), and an optional
+  category (null is the overall budget). One budget per owner, month and category; the overall
+  budget is the NULL-category row, made unique with `NULLS NOT DISTINCT` like category names (D033).
+  A budget can only be on an expense category the owner has and that is not archived. Month, year
+  and category are fixed after creation; only the amount is edited (to move a budget, delete it and
+  add another). The category link is the same owner-pairing composite foreign key as transactions.
+  Budgets are plans, not financial history, so delete is a real delete (D029 does not apply); the
+  transactions are untouched. An archived category keeps its budget and its spending.
+- **What counts as spending.** Expense transactions dated inside the budget's month, nothing else:
+  income, transfers (and later debts and savings, which will not be expenses) never count, so they
+  cannot inflate spending (spec §3.5). An overall budget counts every expense. A category budget
+  counts that category and its subcategories; a subcategory budget counts only itself. A parent and
+  a subcategory may both have budgets; they are independent and overlap on purpose. Archived
+  categories and accounts still count: the money was spent. One place decides this
+  (`BudgetService.SpentAsync`), fed by one aggregate query (`GetExpenseTotalsByCategoryAsync`).
+- **Progress.** `BudgetProgress.Calculate`: remaining (negative once exceeded), percent used
+  truncated to 2 decimals (never rounded up, so "80.00" really means 80% is reached), and a status:
+  `OnTrack` below 80%, `NearLimit` from 80%, `LimitReached` from 100%. The thresholds are compared
+  exactly, without division. Both are constants (80 and 100) for now.
+- **Endpoints.** `GET /budgets?year=&month=` (a month's budgets, each with its progress, overall
+  first), `POST`, `GET /{id}`, `PUT /{id}` (amount and version), `DELETE /{id}`. The spec's separate
+  `/budgets/{id}/progress` is merged into the budget itself: one shape for the frontend and one
+  fewer call. The spec's `/dashboard/budget-overview` is likewise the month's budget list (Part 2).
+- **Alerts (scope reduction).** M5 shows threshold alerts as in-page status (a banner or badge on the
+  Budgets page and the dashboard) computed from the status above. Because the status is computed,
+  there is nothing to duplicate. **Not built:** stored notification records, an inbox with read or
+  dismiss, per-user thresholds, and turning alert types off (spec §3.11 asks for these). They belong
+  with the rest of notifications (recurring, debts), which the roadmap puts in M9. Ask the user if
+  this should move earlier.
+- **Not built:** copying last month's budgets forward; budgets for a range other than one month.
+
+**Why:** spending is already ledger data, so progress is computed, never stored (D006's reasoning);
+nothing to drift out of step with transactions. Keeping subcategories in a parent's budget matches
+how people budget ("Food" includes groceries).
+
+**Consequence:** the database needs one migration (`AddBudgets`). Test cleanup deletes a user's budgets
+before their categories. The race where two requests create the same budget at once ends in the
+unique index and a 409 with the generic message from `UnitOfWork`.
+
+**Not verified:** written without a compiler; `dotnet test` from the user is the check.
+
+## D054 — Dashboard endpoints: computed from the ledger, previous period of equal length, categories rolled up
+
+**Date:** 2026-11-20 **Status:** accepted as the AI's defaults
+
+**Decision:**
+- `GET /api/v1/dashboard/summary?from=&to=` (both required, inclusive, 2000-01-01 or later, at most
+  3660 days). Returns `current` and `previous` (income, expense, net, transaction count) and
+  `expenseByCategory`. The previous period is the same number of days immediately before `from`
+  (1–30 Nov is compared with 2–31 Oct). The change in percent is left to the client, which must handle
+  a previous total of zero.
+- `expenseByCategory` groups by top-level category (a subcategory counts toward its parent), largest
+  first, with `percentOfExpense` truncated to 2 decimals (the same rule as budgets, D053). Archived
+  categories are included. Income categories never appear. Percentages can add to just under 100.
+- `GET /api/v1/dashboard/monthly?months=N&to=` (N 1–24, default 6): one row per calendar month, oldest
+  first, ending with the month of `to`; months with no transactions are returned as zeros so a chart
+  needs no gap filling. `to` is the person's own today (the client sends it, as with D051); when
+  omitted the server's UTC date is used.
+- Transfers are never income or expense (rule 3); all figures reuse `GetTotalsAsync` and
+  `GetExpenseTotalsByCategoryAsync`, so they agree with the transaction list for the same dates (a test
+  compares them). Nothing is stored; no migration.
+- The spec's `/dashboard/budget-overview` is `GET /budgets?year=&month=` (D053). Account balances stay on
+  the existing account endpoints.
+- **Not built:** per-account or per-category filters on the dashboard, a "total balance" figure, trends
+  per category, a custom month grouping. Add when a screen needs them.
+
+**Why:** one aggregate query per figure keeps it fast and always correct (D006); rolling up to the
+top-level category keeps a chart readable and matches how budgets count (D053).
+
+**Not verified:** written without a compiler; the user's `dotnet test` is the check.

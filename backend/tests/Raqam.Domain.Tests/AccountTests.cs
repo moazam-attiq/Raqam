@@ -25,12 +25,36 @@ public class AccountTests
         Assert.Equal(TestData.Now, account.UpdatedAtUtc);
     }
 
+    // D049 reverses D031: an account never starts below zero.
     [Fact]
-    public void Create_allows_a_negative_opening_balance()
+    public void Create_rejects_a_negative_opening_balance()
     {
-        var account = TestData.NewAccount(TestData.NewUserId(), openingBalance: -1500m);
+        Assert.Throws<DomainException>(() => TestData.NewAccount(TestData.NewUserId(), openingBalance: -1500m));
+    }
 
-        Assert.Equal(-1500m, account.OpeningBalance);
+    [Fact]
+    public void Update_rejects_a_negative_opening_balance_and_changes_nothing()
+    {
+        var account = TestData.NewAccount(TestData.NewUserId(), openingBalance: 100m);
+
+        Assert.Throws<DomainException>(() =>
+            account.Update("Renamed", AccountType.Cash, -1m, null, TestData.Later));
+
+        Assert.Equal("Cash", account.Name);
+        Assert.Equal(100m, account.OpeningBalance);
+        Assert.Equal(TestData.Now, account.UpdatedAtUtc);
+    }
+
+    [Fact]
+    public void Touch_sets_the_update_time_only()
+    {
+        var account = TestData.NewAccount(TestData.NewUserId(), openingBalance: 100m);
+
+        account.Touch(TestData.Later);
+
+        Assert.Equal(TestData.Later, account.UpdatedAtUtc);
+        Assert.Equal(TestData.Now, account.CreatedAtUtc);
+        Assert.Equal(100m, account.OpeningBalance);
     }
 
     [Fact]

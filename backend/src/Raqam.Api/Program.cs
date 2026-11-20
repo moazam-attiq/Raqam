@@ -8,6 +8,8 @@ using Raqam.Api.Services;
 using Raqam.Api.Startup;
 using Raqam.Api.Validation;
 using Raqam.Application.Accounts;
+using Raqam.Application.Budgets;
+using Raqam.Application.Dashboard;
 using Raqam.Application.Categories;
 using Raqam.Application.Ledger;
 using Raqam.Application.Transactions;
@@ -63,6 +65,9 @@ builder.Services.AddScoped<AccountService>();
 builder.Services.AddScoped<CategoryService>();
 builder.Services.AddScoped<TransactionService>();
 builder.Services.AddScoped<LedgerService>();
+builder.Services.AddScoped<BalanceGuard>();
+builder.Services.AddScoped<BudgetService>();
+builder.Services.AddScoped<DashboardService>();
 
 // Everything requires authentication unless explicitly marked [AllowAnonymous] or
 // .AllowAnonymous() (business rule 4: every financial endpoint is owner-scoped, and an

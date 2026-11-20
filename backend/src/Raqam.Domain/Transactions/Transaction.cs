@@ -159,6 +159,13 @@ public class Transaction
         var validDescription = Guard.OptionalText(description, DescriptionMaxLength, "Description") ?? string.Empty;
         var validMerchant = Guard.OptionalText(merchant, MerchantMaxLength, "Merchant");
 
+        // A transaction records something that has happened, so it cannot be dated in the future
+        // (D051). The server only knows its own UTC date, and anyone ahead of UTC (Pakistan is
+        // UTC+5) is already on the next day for part of it, so one day beyond UTC "today" is
+        // allowed; the app itself limits the picker to the person's own today.
+        if (transactionDate > DateOnly.FromDateTime(utcNow).AddDays(1))
+            throw new DomainException("Transaction date cannot be in the future.");
+
         EnsureUsableAccount(sourceAccount, SourceAccountId, "Source account");
 
         Guid? validDestinationId = null;

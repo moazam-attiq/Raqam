@@ -5,6 +5,16 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Raqam</title>
+    <script>
+      // Applies the saved theme before the first paint so a dark-mode user never sees a
+      // white flash. Keep in step with src/lib/theme.ts (same storage key and rule).
+      try {
+        var saved = localStorage.getItem('raqam-theme');
+        var dark = saved === 'dark' ||
+          ((saved !== 'light') && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        if (dark) document.documentElement.classList.add('dark');
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

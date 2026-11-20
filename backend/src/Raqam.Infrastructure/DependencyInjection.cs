@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Raqam.Application.Accounts;
+using Raqam.Application.Budgets;
 using Raqam.Application.Categories;
 using Raqam.Application.Common;
 using Raqam.Application.Transactions;
@@ -26,6 +27,7 @@ public static class DependencyInjection
         // Persistence behind the interfaces the Application layer defines (D025). Scoped, so
         // they all share the request's one DbContext and one save is one transaction.
         services.AddScoped<IAccountRepository, AccountRepository>();
+        services.AddScoped<IBudgetRepository, BudgetRepository>();
         services.AddScoped<ICategoryRepository, CategoryRepository>();
         services.AddScoped<ITransactionRepository, TransactionRepository>();
         services.AddScoped<IUnitOfWork, UnitOfWork>();

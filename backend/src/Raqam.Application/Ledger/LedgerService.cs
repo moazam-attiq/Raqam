@@ -22,11 +22,7 @@ public class LedgerService(
 
         var movements = await transactions.GetMovementsAsync(currentUser.UserId, account.Id, asOf, cancellationToken);
 
-        var balance = account.OpeningBalance
-            + movements.Income
-            - movements.Expense
-            + movements.TransfersIn
-            - movements.TransfersOut;
+        var balance = AccountBalance.Of(account, movements);
 
         return new AccountBalanceResponse(
             account.Id,

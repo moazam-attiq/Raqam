@@ -20,10 +20,12 @@ public static class MoneyValidation
                 .WithMessage("'{PropertyName}' is too large.");
     }
 
-    /// <summary>At most 2 decimal places and within what <c>numeric(18,2)</c> holds. Zero and negatives are allowed.</summary>
+    /// <summary>An opening balance: zero or more, at most 2 decimal places, within what <c>numeric(18,2)</c> holds (D049).</summary>
     public static IRuleBuilderOptions<T, decimal> ValidBalance<T>(this IRuleBuilder<T, decimal> rule)
     {
         return rule
+            .GreaterThanOrEqualTo(0m)
+                .WithMessage("'{PropertyName}' cannot be negative.")
             .Must(value => decimal.Round(value, 2) == value)
                 .WithMessage("'{PropertyName}' can have at most 2 decimal places.")
             .Must(value => Math.Abs(value) <= MoneyRules.MaxAmount)

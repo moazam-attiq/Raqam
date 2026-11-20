@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Raqam.Domain.Accounts;
+using Raqam.Domain.Budgets;
 using Raqam.Domain.Categories;
 using Raqam.Domain.Transactions;
 using Raqam.Infrastructure.Identity;
@@ -14,6 +15,7 @@ public class RaqamDbContext(DbContextOptions<RaqamDbContext> options)
     public DbSet<Account> Accounts => Set<Account>();
     public DbSet<Category> Categories => Set<Category>();
     public DbSet<Transaction> Transactions => Set<Transaction>();
+    public DbSet<Budget> Budgets => Set<Budget>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

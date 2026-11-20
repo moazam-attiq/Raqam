@@ -1,6 +1,7 @@
 using Raqam.Application.Accounts;
 using Raqam.Application.Categories;
 using Raqam.Application.Common;
+using Raqam.Application.Ledger;
 using Raqam.Domain.Accounts;
 using Raqam.Domain.Categories;
 using Raqam.Domain.Transactions;
@@ -12,12 +13,15 @@ namespace Raqam.Application.Transactions;
 /// categories named in a request are looked up for the owner only, so another user's id
 /// is "not found" (D026). The domain then enforces the type rules (income, expense and
 /// transfer shapes, matching category type, no archived references). A transfer is one
-/// row, so every change here is a single save (D023, rule 6).
+/// row, so every change here is a single save (D023, rule 6). No change may take an
+/// account's balance below zero (D049): <see cref="BalanceGuard"/> checks that for every
+/// create, edit and delete before anything is saved.
 /// </summary>
 public class TransactionService(
     ITransactionRepository transactions,
     IAccountRepository accounts,
     ICategoryRepository categories,
+    BalanceGuard balanceGuard,
     IUnitOfWork unitOfWork,
     ICurrentUser currentUser,
     TimeProvider clock)
@@ -59,6 +63,9 @@ public class TransactionService(
             request.Merchant,
             Now());
 
+        // Checked before the transaction is added, so the balance it reads does not include it.
+        await balanceGuard.EnsureNotOverdrawnAsync(Effects(transaction, source, destination), cancellationToken);
+
         transactions.Add(transaction);
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
@@ -72,6 +79,10 @@ public class TransactionService(
         var (source, destination, category) = await LoadReferencesAsync(
             request.SourceAccountId, request.DestinationAccountId, request.CategoryId, cancellationToken);
 
+        // What the saved version does to its accounts is taken back out, and what the edited
+        // version does is put in; only the difference per account is checked.
+        var taken = await ReversalAsync(transaction, cancellationToken);
+
         transactions.ExpectVersion(transaction, request.Version);
         transaction.Update(
             request.Type!.Value,
@@ -84,15 +95,24 @@ public class TransactionService(
             request.Merchant,
             Now());
 
+        await balanceGuard.EnsureNotOverdrawnAsync(
+            taken.Concat(Effects(transaction, source, destination)), cancellationToken);
+
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
         return transaction.ToResponse();
     }
 
-    /// <summary>A transaction is hard-deleted (D029); the balance follows because it is computed from the ledger (D006).</summary>
+    /// <summary>
+    /// A transaction is hard-deleted (D029); the balance follows because it is computed from the
+    /// ledger (D006). Deleting income, or the incoming side of a transfer, lowers a balance, so
+    /// it is refused if the money has already been spent (D049).
+    /// </summary>
     public async Task DeleteAsync(Guid id, CancellationToken cancellationToken)
     {
         var transaction = await FindOrThrowAsync(id, cancellationToken);
+
+        await balanceGuard.EnsureNotOverdrawnAsync(await ReversalAsync(transaction, cancellationToken), cancellationToken);
 
         transactions.Remove(transaction);
         await unitOfWork.SaveChangesAsync(cancellationToken);
@@ -107,6 +127,34 @@ public class TransactionService(
             query.Page,
             query.PageSize,
             page.TotalCount);
+    }
+
+    /// <summary>What a transaction does to each account it touches, as balance changes.</summary>
+    private static IEnumerable<BalanceChange> Effects(Transaction transaction, Account source, Account? destination)
+    {
+        yield return new BalanceChange(source, transaction.SignedEffectOn(source.Id));
+
+        if (destination is not null)
+            yield return new BalanceChange(destination, transaction.SignedEffectOn(destination.Id));
+    }
+
+    /// <summary>The opposite of what the saved transaction does, for removing or replacing it. Call before it is changed.</summary>
+    private async Task<List<BalanceChange>> ReversalAsync(Transaction transaction, CancellationToken cancellationToken)
+    {
+        var ids = new[] { transaction.SourceAccountId, transaction.DestinationAccountId }
+            .OfType<Guid>()
+            .Distinct();
+
+        var reversal = new List<BalanceChange>();
+        foreach (var accountId in ids)
+        {
+            var account = await accounts.FindAsync(currentUser.UserId, accountId, cancellationToken)
+                ?? throw new NotFoundException("Account was not found.");
+
+            reversal.Add(new BalanceChange(account, -transaction.SignedEffectOn(accountId)));
+        }
+
+        return reversal;
     }
 
     private async Task<Transaction> FindOrThrowAsync(Guid id, CancellationToken cancellationToken)

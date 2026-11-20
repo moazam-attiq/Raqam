@@ -20,11 +20,16 @@ public static class MoneyRules
     }
 
     /// <summary>
-    /// An opening balance: may be zero or negative (an account can start overdrawn),
-    /// at most 2 decimals, within range.
+    /// An opening balance: zero or more (an account never starts below zero, D049), at most
+    /// 2 decimals, within range.
     /// </summary>
     public static decimal EnsureValidBalance(decimal amount, string fieldName = "Opening balance")
-        => EnsureValidScaleAndRange(amount, fieldName);
+    {
+        if (amount < 0)
+            throw new DomainException($"{fieldName} cannot be negative.");
+
+        return EnsureValidScaleAndRange(amount, fieldName);
+    }
 
     private static decimal EnsureValidScaleAndRange(decimal amount, string fieldName)
     {

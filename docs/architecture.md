@@ -89,9 +89,49 @@ Tests live beside `src/`: `Raqam.Domain.Tests` (no database) and
   repository and run in the database; search escapes `%` and `_` and uses a
   case-insensitive match. List responses are `{items, page, pageSize,
   totalCount, totalPages}`.
+- **No negative balances (D049):** `BalanceGuard` (Application) refuses a create, edit or delete
+  that would take an account below zero, and touches the account row so two simultaneous spends
+  conflict instead of both passing. Only the current balance is checked, not each past day.
+- **No future dates (D051):** `Transaction.Apply` refuses a date after UTC today plus one day.
 - **Single transaction per request:** a transfer is one row; the only
   multi-record change is archiving a parent category together with its
   children, which is one `SaveChangesAsync` and so one database transaction.
+
+## Frontend (M4)
+
+`frontend/raqam-web` is a single-page app: React 19, TypeScript, Vite, Tailwind CSS 4, Radix UI
+primitives (D038). It only talks to the API; it holds no money rules of its own beyond guidance
+(the server is the authority, D049/D051).
+
+```text
+src/
+  components/ui/       Button, Input, FormField, Dialog, ConfirmDialog, DateField, Table, ...
+  components/layout/   AppShell (sidebar, navbar), PageHeader, NotFound
+  components/theme/    light / dark / system, persisted, applied before first paint
+  features/<area>/     accounts, categories, transactions, dashboard, auth, security:
+                       each has its pages, dialogs, <area>-api.ts (TanStack Query hooks) and tests
+  lib/                 api client, money, dates, query client
+  test/                fetch mock and render helper used by every feature test
+```
+
+- **API access:** one client (`lib/api/client.ts`) adds the CSRF header, retries once on a stale
+  token, and turns every failure into an `ApiError` with a kind (`validation`, `rule`, `conflict`,
+  `unauthorized`, ...) whose message is safe to show. In development Vite proxies `/api` to the
+  HTTPS API (D037).
+- **Server state:** TanStack Query, 30 s stale time. After a change, the lists and balances it
+  affects are invalidated (D046). Nothing is copied into component state.
+- **URL is state:** transaction filters, sort and page live in the address, so a view can be
+  reloaded or shared. The default view is this month so far (D050).
+- **Forms:** react-hook-form with zod. Amounts are parsed from text, never rounded, at most 2
+  decimals (`lib/money.ts`, D030). A 409 offers "load the latest" and saves against the new
+  version; a duplicate name keeps what was typed (D045).
+- **Guidance, not authority:** the transaction form shows "Available: Rs X" and blocks an amount
+  above it, and the date picker stops at today; the server refuses the same things (D049, D051).
+- **Sign-in and 2FA:** cookie session; the sign-in page handles the code and recovery-code steps,
+  and `/security` turns two-step verification on and off (D043, D052).
+- **Quality:** each page has loading, empty and error states; checked with axe-core in light and
+  dark and at 390, 768, 1024 and 1440 px (D048); dialogs return focus to what opened them.
+- **Tests:** Vitest and Testing Library with `fetch` replaced per test (D039). Run `npm test`.
 
 ## Why this split
 

@@ -50,14 +50,23 @@ public class MoneyRulesTests
 
     [Theory]
     [InlineData("0")]
-    [InlineData("-200")]
     [InlineData("5000.50")]
-    [InlineData("-9999999999999999.99")]
-    public void Balance_allows_zero_and_negative(string text)
+    [InlineData("9999999999999999.99")]
+    public void Balance_allows_zero_and_positive(string text)
     {
         var balance = TestData.Amount(text);
 
         Assert.Equal(balance, MoneyRules.EnsureValidBalance(balance));
+    }
+
+    // D049: an account never starts below zero.
+    [Theory]
+    [InlineData("-0.01")]
+    [InlineData("-200")]
+    [InlineData("-9999999999999999.99")]
+    public void Balance_rejects_negative(string text)
+    {
+        Assert.Throws<DomainException>(() => MoneyRules.EnsureValidBalance(TestData.Amount(text)));
     }
 
     [Theory]

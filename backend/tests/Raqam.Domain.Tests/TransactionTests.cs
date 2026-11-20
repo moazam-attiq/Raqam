@@ -368,4 +368,45 @@ public class TransactionTests
         Assert.Equal(0m, tx.SignedEffectOn(from.Id) + tx.SignedEffectOn(to.Id));
         Assert.Equal(0m, tx.SignedEffectOn(Guid.NewGuid()));
     }
+
+    // ---- The date (D051) -------------------------------------------------------------
+
+    [Fact]
+    public void A_date_in_the_future_is_refused_on_create_and_on_update()
+    {
+        var account = NewAcc();
+        var category = NewCat(CategoryType.Expense);
+        var tooLate = TestData.Today.AddDays(2);
+
+        var created = Assert.Throws<DomainException>(() =>
+            Transaction.Create(_userId, TransactionType.Expense, 10m, tooLate, account, null, category, null, null, TestData.Now));
+        Assert.Equal("Transaction date cannot be in the future.", created.Message);
+
+        var tx = Create(TransactionType.Expense, 10m, account, category: category);
+        Assert.Throws<DomainException>(() =>
+            tx.Update(TransactionType.Expense, 10m, tooLate, account, null, category, null, null, TestData.Later));
+        Assert.Equal(TestData.Today, tx.TransactionDate);
+    }
+
+    [Fact]
+    public void Today_and_the_next_day_are_allowed_for_people_ahead_of_UTC()
+    {
+        var account = NewAcc();
+        var category = NewCat(CategoryType.Expense);
+
+        var today = Transaction.Create(_userId, TransactionType.Expense, 10m, TestData.Today, account, null, category, null, null, TestData.Now);
+        var next = Transaction.Create(_userId, TransactionType.Expense, 10m, TestData.Today.AddDays(1), account, null, category, null, null, TestData.Now);
+
+        Assert.Equal(TestData.Today, today.TransactionDate);
+        Assert.Equal(TestData.Today.AddDays(1), next.TransactionDate);
+    }
+
+    [Fact]
+    public void Any_past_date_is_allowed()
+    {
+        var tx = Transaction.Create(
+            _userId, TransactionType.Expense, 10m, new DateOnly(1999, 1, 1), NewAcc(), null, NewCat(CategoryType.Expense), null, null, TestData.Now);
+
+        Assert.Equal(new DateOnly(1999, 1, 1), tx.TransactionDate);
+    }
 }

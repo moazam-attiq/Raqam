@@ -115,7 +115,9 @@ an empty scratch database; OpenAPI document lists every M3 endpoint. The M2
 carry-over (cross-user ownership test) is covered by `OwnershipTests`. Details in
 `PROGRESS.md`.
 
-## [ ] M4 — Core frontend
+## [~] M4 — Core frontend
+
+_Status 2026-11-20: all deliverables are written and the build, lint and test run passed on the user's machine; the browser walkthrough with the real API is still open (see `TASKS.md`, "M4 carry-over"). M5 was opened in parallel at the user's request._
 
 **Objective:** core financial tasks usable in the browser.
 
@@ -129,7 +131,7 @@ works at desktop and mobile widths; API validation errors are shown clearly.
 
 **Manual actions:** user checks the UI on real devices if desired.
 
-## [ ] M5 — Budgets and dashboard analytics
+## [~] M5 — Budgets and dashboard analytics
 
 **Objective:** budgets and a dashboard whose numbers reconcile.
 
@@ -214,6 +216,9 @@ Action Rule.
 ## Current milestone
 
 **M3 — Core financial domain and database** is complete (closed 2026-11-11,
-session 6). **M4 — Core frontend** is next and is not opened yet: its open
-decisions are discussed with the user first, then `TASKS.md` is replaced with the
-M4 checklist.
+session 6). **M4 — Core frontend** is code-complete and its build, lint and tests passed on the
+user's machine; the browser walkthrough with the real API is still open, so it is not closed.
+**M5 — Budgets and dashboard analytics** (in progress, opened 2026-11-20, session 7, at the
+user's request while M4 is being tested). `TASKS.md` holds the M5 checklist and lists the M4
+items still open; the full M4 checklist is `TASKS-M4.md`. Decisions: D049–D052 (rules and 2FA
+screen added during the M4 walkthrough), D053 (budgets).

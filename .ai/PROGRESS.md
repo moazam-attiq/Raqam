@@ -3,6 +3,317 @@
 Reverse chronological. Record what actually happened; never rewrite earlier
 entries.
 
+## 2026-11-20 — Session 7 (continued): User confirmations
+
+User reported (no output pasted): 2FA works with a real authenticator app; the budgets page works in the browser. Recorded in
+`TASKS.md`. Correction: the user also said `dotnet test` passed, but the next output they shared was a
+compile error in `DashboardTests.cs`; the fix was committed twice (the first did not land on the device,
+caught by reading the file back). The backend test run is therefore unverified. M4 stays `[~]`: edit/delete, filter/search, phone-width and recovery-code checks are not yet
+reported. The user is committing M4 fixes, M5 Parts 1–3 on a branch to merge into main.
+
+## 2026-11-20 — Session 7 (continued): Budgets page written
+
+User ran `dotnet test` on the dashboard backend, which first failed to compile on a missing `using` in
+`DashboardTests.cs` (my omission, fixed); no passing output pasted yet.
+
+M5 Part 3 written: `features/budgets/` (API hooks, `BudgetsPage`, `BudgetFormDialog`, month helpers),
+`/budgets` route and a sidebar link, and the transaction mutations now also refresh budget queries.
+Checked in the AI's workspace only: 305 frontend tests, lint and build clean, axe clean in light and
+dark for the list, both dialogs and the delete confirmation, no overflow at 390 and 768 px. The month
+is in the address (`?month=2026-11`); alerts are computed from the server's status (D053), with no
+notification inbox. Needs the user: `npm test`, `npm run lint`, `npm run build`, and a look in the
+browser.
+
+**Next:** Part 4, the dashboard analytics (period filter, income/expense/net with change, category and
+monthly charts, budget alerts).
+
+## 2026-11-20 — Session 7 (continued): Budgets confirmed, dashboard backend written
+
+User reported the budgets migration applied and "everything working" after one test compile error
+(my mistake: `SqlStateAsync` and `WithDbAsync` are on `TestDatabase`, not `TestApiClient`; fixed). No
+test output was pasted after the fix, so M5 Part 1 is recorded as user-reported.
+
+M5 Part 2 written, not compiled: `GET /dashboard/summary` (period, previous period of equal length,
+expense by top-level category) and `GET /dashboard/monthly` (N calendar months, zero-filled), service,
+validators, controller, a monthly-totals aggregate on `ITransactionRepository`, and `DashboardTests`
+(previous-period window edges, subcategory rollup, transfers excluded, archived category, other users,
+agreement with the transaction list, validation, year boundary). Decision D054. No migration.
+Needs the user: `dotnet test`.
+
+**Next:** Part 3, the Budgets page (frontend).
+
+## 2026-11-20 — Session 7 (continued): M5 opened, budgets backend written
+
+User said the rest is being tested on their side and to move to the next phase. Done first:
+README and `docs/architecture.md` now describe the frontend, the no-overdraft rule (D049) and the
+no-future-date rule (D051); `npm install` is needed for `uqr`. M4 stays `[~]` (browser
+walkthrough open); M5 is `[~]`. `TASKS.md` is now the M5 checklist; the M4 one is kept as
+`TASKS-M4.md` with the open items listed.
+
+M5 Part 1 (budgets backend) written, not compiled: `Budget`, `BudgetProgress` (80% and 100%),
+service, repository, controller, an expense-by-category aggregate, the entity configuration with
+a `NULLS NOT DISTINCT` unique index and check constraints, and tests (domain, API, database
+constraints). Decisions in D053, including a scope reduction: alerts are shown as status, with
+no stored notification inbox. Needs the user: `dotnet ef migrations add AddBudgets`, `dotnet ef
+database update`, `dotnet test` (commands in `TASKS.md`). The test client's cleanup now deletes
+budgets before categories, so run the migration before any test run.
+
+**Next:** user runs the migration and `dotnet test`; then Part 2 (dashboard summary and monthly
+endpoints) and the frontend parts.
+
+## 2026-11-20 — Session 7 (continued): Test results, no future dates, 2FA screen
+
+User ran `dotnet test` and `npm test`, `npm run lint`, `npm run build` and shared the output: backend
+159 of 159 passed (this includes the D049 no-overdraft tests), frontend 19 files / 246 tests
+passed, lint 0 and 0, build OK.
+
+Then asked for 2FA to be in scope and for future-dated transactions to be blocked, and said to
+move on while they test.
+- **Future dates (D051).** Server rule in `Transaction.Apply` (UTC today + 1 day), form limit and
+  message, 3 domain tests, 3 API tests (`FutureDateTests`), 2 frontend tests. Backend not run yet.
+- **2FA screen (D052).** `/security` page: turn on with QR and key, code check, recovery codes
+  shown once, turn off with confirmation; `uqr` added for the QR. 10 tests; axe clean; QR decoded
+  back to the exact link in a real browser. Frontend: 259 tests in the AI's workspace.
+
+**Next:** user runs `npm install` (new dependency), `dotnet test`, `npm test`, and tries 2FA with
+a real authenticator app, then signs out and in with a code and with a recovery code.
+
+## 2026-11-20 — Session 7 (continued): Part 8 walkthrough feedback, no-overdraft, month filter
+
+User ran `npm install`, build, lint and test and shared the output: install up to date, build OK
+(chunk over 500 kB warning only), lint 0 warnings and 0 errors, vitest 18 files / 219 tests all
+passed. Walkthrough, as the user reported it: sign-in works but 2FA was never enabled or
+exercised (there is no 2FA setup screen, deferred in D043); creating accounts and categories
+works; income, expense and transfer work. Edit, delete, filter and search, a visible API
+validation error and phone width were not reported.
+
+New requirements from the user, done:
+- **No negative balances (D049).** Backend `BalanceGuard`, opening balance >= 0, new
+  `OverdraftTests`, and updated existing tests that relied on overdraft. Frontend: account form
+  rejects a negative opening balance; transaction form shows the available balance and blocks a
+  larger expense or transfer. **Backend is not compiled or run yet.**
+- **Month filter and date limits (D050).** Default 1st of this month to today; From/To cannot be
+  in the future; today is highlighted more.
+Frontend: 246 tests pass in the AI's workspace; tsc, lint and build clean.
+
+**Next:** user runs `dotnet test` and `npm test` and shares the output; decide on the 2FA screen,
+on blocking future-dated transactions, and on when to do debts (M8) relative to M5.
+
+## 2026-11-20 — Session 7 (continued): Part 7 quality pass
+
+User said to continue. Built the app and ran axe-core in headless Chromium against stubbed API
+responses: every page and dialog in light and dark, then every page in its loading, empty and
+server-error state, then widths 390 / 768 / 1024 / 1440, theme persistence across a reload,
+and keyboard use. Found and fixed six things (D048): focus was lost to the page top when a
+dialog closed; at tablet width the transactions table hid Amount and the row buttons; a hidden
+table header made the page scroll sideways; sign-in's brand panel was outside a landmark;
+loading placeholders were not announced; the account page had no title when it failed.
+After the fixes axe reports nothing in any of those runs. Added 4 tests (focus restore: opened
+by a button, by a confirm, mounted open with an autofocus field, opener removed; plus a heading
+assertion).
+219 tests pass in the AI's scratch workspace; tsc, lint and build are clean. Not run on the
+user's machine, no real API call from the UI yet, and no screen reader was used.
+
+**Next:** Part 8 needs the user: `npm install`, then `npm run build && npm run lint && npm test`
+and `npm run dev` with the API running, sign in, and go through the walkthrough in TASKS.
+Their output is what ticks Parts 2 to 7 and lets M4 close.
+
+## 2026-11-20 — Session 7 (continued): Part 6 written, dashboard layout
+
+User said to continue. Checked the backend first: there is no totals or reports endpoint, and
+the checklist says layout only, so the dashboard uses what exists: account balances and the
+transaction list. Written: total balance card, accounts list, the latest 8 transactions, a
+quick "New transaction" button, and a section-by-section loading, empty and error state. The
+total is summed in whole paise and left out (with a note) if any balance failed to load,
+rather than showing a partial figure. Two helpers were shared with the transactions page
+(row text, signed amount). Recorded as D047.
+215 tests pass in the AI's scratch workspace (11 new); tsc, lint and build are clean;
+screenshots in light, dark and phone width reviewed. Not run on the user's machine, and no
+real API call from the UI yet.
+
+**Next:** the user runs `npm test` and `npm run dev` and looks at the dashboard with real data.
+Then Part 7 (quality pass: loading/empty/error states, responsive and accessibility checks,
+theme persistence) and Part 8 (verification and close-out), which need the user's real output.
+
+## 2026-11-20 — Session 7 (continued): Part 5 written, transactions screens
+
+User said to move on. Read the real controller, validators, service, domain rules and the
+repository's search before writing, so the form follows the API: income and expense need a
+matching category, a transfer needs two different accounts and no category, a new transaction
+may not use an archived account or category but an existing one may keep it, and the list
+filters are from, to, type, account, category, search, sort and page.
+
+Written: transactions list with filters, sort and paging kept in the address; create and edit
+dialog with type-dependent fields, "Save and add another", last-used account remembered, and
+`400` and `409` handling; delete with confirmation; helpers for filter parsing and category
+options; tests. Screenshots showed the phone layout hiding the row buttons and filling the
+screen with filters, so the mobile columns were reworked and the filters fold behind a button;
+table cells now use less side padding on small screens (also affects the accounts tables).
+204 tests pass in the AI's scratch workspace (42 new this part); tsc, lint and build are clean;
+screenshots in light, dark and phone width reviewed. Not run on the user's machine, and no
+real API call from the UI yet. Recorded as D046.
+
+**Next:** the user runs `npm test` and `npm run dev` and records a few real transactions
+(an expense, an income, a transfer), then checks the account balances; then Part 6 (dashboard).
+
+## 2026-11-20 — Session 7 (continued): Part 4 written, categories screens; accounts 409 fix
+
+User said to move on. Read the real category contracts, validators, service, domain rules and
+the exception handler before writing. Found that the API answers a duplicate name with 409,
+the same status as a stale version, with no code to tell them apart, and that account names
+are unique too. That showed a bug in the Part 3 accounts dialog: a duplicate name on an edit
+would have offered "Load latest", which replaces what was typed, and its test had used an
+invented 400. Both fixed with one shared check (refetch and compare the version), recorded
+in D045 as a correction to D044.
+
+Written: categories tree with an Expenses/Income switch, create and edit dialog (colour
+swatches, parent choice, subcategory with fixed parent), archive confirmation that warns
+about subcategories, the tree helper, and tests. 162 tests pass in the AI's scratch workspace
+(23 new, plus 2 changed in accounts); tsc, lint and build are clean; screenshots in light,
+dark and phone width reviewed. Not run on the user's machine, and no real API call from the
+UI yet.
+
+**Next:** the user runs `npm test` and `npm run dev` and tries accounts and categories against
+the real API; then Part 5 (transactions).
+
+## 2026-11-20 — Session 7 (continued): Part 3 written, accounts screens
+
+User said to move on after the navbar and toast change. Read the real account contracts
+(controller, request and response records, validators, service, balance, the 409 body)
+before writing the screens. Written: accounts list with balances, create and edit dialog
+with 409 "Load latest" recovery, archive with confirmation, account detail with balance
+breakdown and paged history, plus shared `Select` and `Pagination` and the transaction
+types. Recorded as D044. 139 tests pass in the AI's scratch workspace (19 new); tsc, lint
+and build are clean; screenshots of list, detail, form in light, dark and phone width were
+reviewed, which found and fixed clipped columns on a phone. Not run on the user's machine
+yet, and no real API call has been made from the UI.
+
+**Next:** the user runs `npm install`, `npm test` and `npm run dev` and looks at the
+accounts pages against the real API; then Part 4 (categories).
+
+## 2026-11-20 — Session 7 (continued): navbar and dynaura toasts
+
+User asked for toasts from `dynaura` and the theme toggle in a navbar (laptop and mobile).
+Checked that `dynaura` exists on npm (Dynamic Island style toasts, React supported, zero
+dependencies) and read its documentation before using it. `ToastProvider` now mounts its
+`Toaster` and `notify` calls `dynaura.success`, `.error` or `.info`; theme colours are CSS
+variables. The shell gained a top navbar (theme toggle, email, Sign out); the sidebar is
+navigation only; the mobile top bar carries the toggle. Recorded as D042 amendment 2.
+Scratch checks pass again (120 tests, lint, build); screenshots reviewed. Not yet run on the
+user's machine.
+
+## 2026-11-20 — Session 7 (continued): Part 2 written, authentication screens
+
+**Read first:** the real auth controllers and contracts. Sign-in answers 200 with
+`succeeded`, `requiresTwoFactor` and `lockedOut` even for a wrong password; the 2FA routes
+are `verify` and `recovery-code`. Recorded in D043.
+
+**Written (frontend/raqam-web/src):** `features/auth/` (`auth-api`, `session`, `RequireAuth`,
+`AuthLayout`, `SignInPage` with password, authenticator-code and recovery-code steps),
+global 401 handling in `lib/query-client.ts`, routes in `App.tsx`, sign-out and the signed-in
+email in the shell, test helpers `test/api-mock.ts` and `test/render-app.tsx`, and 19 new tests
+(guard, sign-in outcomes, 2FA, sign-out, 401). `App.test.tsx` now signs a user in first.
+
+**Checked in the AI's scratch workspace:** typecheck, lint, build, and 120 tests (in three
+timezones). Screenshots reviewed for sign-in (light, dark, mobile), the code step and the
+signed-in shell. Not yet run on the user's machine, and never against the real API.
+
+**Deferred:** the 2FA setup and disable screen (D043).
+
+**Not done:** the user's `npm test`, and a real sign-in with `npm run dev` and the API on
+the https profile.
+
+**Next:** user verifies sign-in for real; then Part 3 (accounts).
+
+## 2026-11-20 — Session 7: Part 1 verified; brand pass written (D042)
+
+**Verified by the user:** `npm run build`, `npm run lint` and `npm test` all passed on
+their machine after the Radix install. Part 1 items ticked in `TASKS.md`.
+
+**Design request:** the user did not like the look and asked for brand consistency and
+better light and dark modes. Recorded as D042: lapis and gold palette as CSS variables with
+semantic Tailwind names (no `dark:` variants in components), a lapis sidebar in both themes
+with a gold current-page marker, IBM Plex Sans with tabular figures, the Arabic wordmark
+رقم in Reem Kufi, flat outlined cards, shadows only on overlays, a new favicon.
+
+**What changed (frontend/raqam-web):** `src/index.css` (tokens, fonts, focus ring, `num`
+utility), `src/components/layout/` (new `Wordmark`, `AppShell`, `PageHeader`,
+`NotFoundPage`), `ThemeToggle`, and the UI kit (`Button`, `Input`, `Card`, `Badge`, `Table`,
+`Spinner`, `EmptyState`, `ErrorState`, `FormField`, `Dialog`, `ConfirmDialog`,
+`DateField`, `ToastProvider`), `public/favicon.svg`, `package.json` (two font packages).
+
+**Checked in the AI's scratch workspace:** typecheck, lint, production build and all 101
+tests pass; screenshots reviewed in light, dark, mobile, dialog and calendar states. All
+text pairs meet 4.5:1. Not yet run on the user's machine.
+
+**Icons (same session):** the user asked for icons on buttons. Added `lucide-react`; nav
+items, menu button, theme toggle, calendar, toast dismiss and Try again now have icons, and a
+new `IconButton` is ready for row actions. Scratch checks pass again (101 tests, build, lint).
+
+**Not done:** the user's `npm install`, `npm test` and a browser look at the new design;
+Parts 2-8.
+
+**Next:** adjust the design if the user wants changes, then Part 2 (sign-in, 2FA, guard).
+
+## 2026-11-11 — Session 6 (continued): M4 Part 1 foundation written
+
+**What was written (frontend/raqam-web):** Vite proxy and Vitest config, `@` alias,
+`.env.example` → `/api/v1`, theme bootstrap in `index.html`; `src/lib` (API client with
+lazy CSRF and one retry, `ApiError` mapping, PKR money helpers, dayjs date helpers per
+D041, theme, query client); UI kit in `src/components/ui` (Radix dialog, alert dialog,
+popover; date field with typed input and calendar); theme provider and toggle; app shell
+with sidebar, mobile menu and skip link; placeholder pages; routes. 49 files, with tests.
+
+**Verification so far:** pushed through the bridge and re-read back, 49/49 byte-identical.
+In the AI's own scratch workspace: typecheck, lint, production build and 101 Vitest tests
+passed (also under 5 timezones). Not yet run on the user's machine.
+
+**Found:** the real recovery-code route is `/two-factor/recovery-code`; the README had
+`redeem-recovery-code`. Fixed. README "Run the frontend" now covers the https profile,
+proxy, `.env.local` and test scripts.
+
+**Not done:** user's `npm run build`, `npm run lint`, `npm test` output; a browser check
+of the shell, theme and proxy/cookie flow; Parts 2–8.
+
+**Next:** user installs the Radix packages (done per the user) and runs the checks; then
+Part 2 (sign-in, 2FA, guard).
+
+## 2026-11-11 — Session 6 (continued): date format decision (D041)
+
+The user answered the D040 check-in with one change: use dayjs, and show dates as
+`18 May 2026` everywhere. Recorded as D041 (appended, D040 left as written). Reading
+taken: display format only; the API and URL parameters keep `YYYY-MM-DD`. Because the
+native date input cannot show that format, date fields become a button with a calendar
+popover (`react-day-picker`); flagged to the user as an added dependency. D040 is
+otherwise treated as accepted. `TASKS.md` Part 0 and Part 1 updated; the install
+command gained `dayjs` and `react-day-picker`.
+
+**Not done:** still no frontend code; dependencies not yet installed.
+
+## 2026-11-11 — Session 6 (continued): M4 opened
+
+**Discussed with the user (recommended option unless noted):** dev API access through
+the Vite proxy (D037); Radix UI primitives + Tailwind for components (D038, the user
+chose this over the recommended hand-built set); Vitest + Testing Library in M4 (D039).
+The AI also set frontend conventions (D040: feature folders, TanStack Query, RHF + Zod,
+money as strings, dates as `YYYY-MM-DD`, theme via system/toggle, confirmed destructive
+actions, dashboard layout only) and asked the user to confirm or change them.
+
+**What was written:** D037–D040 in `DECISIONS.md`; `TASKS.md` replaced with the M4
+checklist (Parts 0–8); `ROADMAP.md` M4 `[~]`; `CONTEXT.md` state line.
+
+**Found while reading:** the README says the recovery-code route is
+`/two-factor/redeem-recovery-code`, but the OpenAPI document lists
+`POST /api/v1/auth/two-factor/recovery-code`. One is wrong; added to Part 2 to confirm
+against the controller and fix. The frontend `.env.example` still points at
+`http://localhost:5196/api/v1`; it changes with Part 1 (D037).
+
+**Not done:** no frontend code yet; dependencies not installed.
+
+**Next:** the user confirms D040 (or changes it); then Part 1 — the user installs the
+dependencies and the AI writes the proxy config, API client, helpers, theme, shell and
+base components.
+
 ## 2026-11-11 — Session 6 (continued): M3 closed
 
 **Verification (user-run, output shared):** `dotnet test` on `Raqam.Api.Tests`: 55

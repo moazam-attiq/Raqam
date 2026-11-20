@@ -212,6 +212,59 @@ namespace Raqam.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Raqam.Domain.Budgets.Budget", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<Guid?>("CategoryId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Month")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.Property<int>("Year")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "CategoryId");
+
+                    b.HasIndex("UserId", "Year", "Month", "CategoryId")
+                        .IsUnique();
+
+                    NpgsqlIndexBuilderExtensions.AreNullsDistinct(b.HasIndex("UserId", "Year", "Month", "CategoryId"), false);
+
+                    b.ToTable("Budgets", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_Budgets_Amount_Positive", "\"Amount\" > 0");
+
+                            t.HasCheckConstraint("CK_Budgets_Month_Valid", "\"Month\" BETWEEN 1 AND 12");
+
+                            t.HasCheckConstraint("CK_Budgets_Year_Valid", "\"Year\" BETWEEN 2000 AND 2100");
+                        });
+                });
+
             modelBuilder.Entity("Raqam.Domain.Categories.Category", b =>
                 {
                     b.Property<Guid>("Id")
@@ -468,6 +521,21 @@ namespace Raqam.Infrastructure.Persistence.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("Raqam.Domain.Budgets.Budget", b =>
+                {
+                    b.HasOne("Raqam.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Raqam.Domain.Categories.Category", null)
+                        .WithMany()
+                        .HasForeignKey("UserId", "CategoryId")
+                        .HasPrincipalKey("UserId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("Raqam.Domain.Categories.Category", b =>

@@ -4,10 +4,12 @@ Raqam (رقم, "amount") is a personal finance and expense tracker: a single-use
 PKR-first web application for tracking accounts, income, expenses, transfers,
 budgets, and more.
 
-Status: M3 (core financial domain and database) complete. The API manages
-accounts, categories, and income / expense / transfer transactions with
-ledger-based balances, behind cookie authentication and optional 2FA. There is
-no frontend feature yet (M4) — see `.ai/ROADMAP.md`.
+Status: M3 (core financial domain and database) complete; M4 (core frontend) in
+progress. The API manages accounts, categories, and income / expense / transfer
+transactions with ledger-based balances, behind cookie authentication and
+optional 2FA. The frontend has its foundation (app shell, theme, UI kit, API
+client) and placeholder pages; the feature screens are being built — see
+`.ai/ROADMAP.md`.
 
 - Specification: [docs/raqam-project-specification.md](docs/raqam-project-specification.md)
 - Project memory and current state: [.ai/CONTEXT.md](.ai/CONTEXT.md)
@@ -154,7 +156,7 @@ curl -b cookies.txt http://localhost:5196/api/v1/auth/me
 If 2FA is enabled on the account, step 2 instead returns that a second
 factor is required; complete the sign-in with `POST
 /api/v1/auth/two-factor/verify` (authenticator code) or
-`/two-factor/redeem-recovery-code` (a recovery code), using the same
+`/two-factor/recovery-code` (a recovery code), using the same
 cookie jar.
 
 ### Enabling 2FA (TOTP)
@@ -178,6 +180,9 @@ curl -b cookies.txt -X POST http://localhost:5196/api/v1/auth/two-factor/enable 
   -d '{"code":"123456"}'
 # => {"recoveryCodes":["...", ... 10 codes total]}
 ```
+
+In the app, the same steps are on the **Security** page (QR code, 6-digit check, recovery codes
+shown once, turn off with a confirmation); no curl needed.
 
 Save the 10 recovery codes somewhere safe — each is single-use and lets you
 sign in if you lose access to the authenticator app. `POST
@@ -261,15 +266,34 @@ the dev database.
 
 ## Run the frontend
 
+The dev server proxies `/api` to the API over HTTPS (D037), so start the API
+with the `https` launch profile first:
+
 ```bash
+# terminal 1
+cd backend/src/Raqam.Api
+dotnet run --launch-profile https      # https://localhost:7271
+
+# terminal 2
 cd frontend/raqam-web
+cp .env.example .env.local             # VITE_API_BASE_URL=/api/v1
 npm install
 npm run dev
 ```
 
-The dev server listens on http://localhost:5173.
+Open http://localhost:5173. Requests go to `/api/v1/...` on the same origin and
+Vite forwards them to the API (self-signed dev certificate accepted), so the
+auth cookie and CSRF header behave as in production. The sign-in cookie is
+`Secure`; Chrome and Firefox accept it on `http://localhost`, Safari may not.
 
-Other scripts: `npm run build` (typecheck and production build), `npm run lint`.
+Pages: Dashboard, Accounts (and each account's history), Categories, Transactions, Security.
+An account never goes below zero and a transaction cannot be dated in the future; the forms
+show what is available and stop at today, and the API refuses the same things. The transactions
+list opens on this month so far; choose an earlier From date to look back.
+
+Scripts: `npm run build` (typecheck and production build), `npm run lint`,
+`npm test` (Vitest + Testing Library; the API is mocked at `fetch`),
+`npm run test:watch`.
 
 ## Configuration
 

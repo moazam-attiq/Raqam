@@ -22,6 +22,17 @@ public interface ITransactionRepository
     Task<IncomeExpenseTotals> GetTotalsAsync(
         Guid userId, DateOnly? from, DateOnly? to, Guid? accountId, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Expense totals per category for an inclusive date range (transfers and income excluded),
+    /// aggregated in the database. Budgets and the dashboard's category breakdown build on it.
+    /// </summary>
+    Task<IReadOnlyList<CategoryTotal>> GetExpenseTotalsByCategoryAsync(
+        Guid userId, DateOnly from, DateOnly to, CancellationToken cancellationToken);
+
+    /// <summary>Income and expense per calendar month inside a date range (transfers excluded); months with no rows are absent.</summary>
+    Task<IReadOnlyList<MonthlyTotal>> GetMonthlyTotalsAsync(
+        Guid userId, DateOnly from, DateOnly to, CancellationToken cancellationToken);
+
     void Add(Transaction transaction);
 
     void Remove(Transaction transaction);
@@ -38,7 +49,11 @@ public sealed record AccountMovements(decimal Income, decimal Expense, decimal T
     public static AccountMovements None { get; } = new(0m, 0m, 0m, 0m);
 }
 
+public sealed record CategoryTotal(Guid CategoryId, decimal Total);
+
 public sealed record IncomeExpenseTotals(decimal Income, decimal Expense, int TransactionCount)
 {
     public static IncomeExpenseTotals None { get; } = new(0m, 0m, 0);
 }
+
+public sealed record MonthlyTotal(int Year, int Month, decimal Income, decimal Expense);

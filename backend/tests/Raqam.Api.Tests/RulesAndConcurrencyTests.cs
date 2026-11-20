@@ -228,7 +228,7 @@ public class RulesAndConcurrencyTests(ApiFactory factory)
     [Fact]
     public async Task Searching_for_a_percent_sign_matches_the_literal_character_only()
     {
-        var account = await _user.CreateAccountAsync("Search account", 0m);
+        var account = await _user.CreateAccountAsync("Search account", 100m);
         await _user.CreateTransactionAsync(TransactionType.Expense, 1m, Date, account.Id, categoryId: _food.Id, merchant: "Cafe 50%");
         await _user.CreateTransactionAsync(TransactionType.Expense, 2m, Date, account.Id, categoryId: _food.Id, merchant: "Plain shop");
         await _user.CreateTransactionAsync(TransactionType.Expense, 3m, Date, account.Id, categoryId: _food.Id, description: "snake_case note");
@@ -243,7 +243,7 @@ public class RulesAndConcurrencyTests(ApiFactory factory)
     [Fact]
     public async Task Filtering_by_a_parent_category_includes_its_subcategories()
     {
-        var account = await _user.CreateAccountAsync("Category filter account", 0m);
+        var account = await _user.CreateAccountAsync("Category filter account", 100m);
         var parent = await _user.CreateCategoryAsync("Filter parent", CategoryType.Expense);
         var child = await _user.CreateCategoryAsync("Filter child", CategoryType.Expense, parent.Id);
         var other = await _user.CreateCategoryAsync("Filter other", CategoryType.Expense);
@@ -263,7 +263,7 @@ public class RulesAndConcurrencyTests(ApiFactory factory)
     [Fact]
     public async Task Type_date_range_sort_and_paging_work_together()
     {
-        var account = await _user.CreateAccountAsync("Paging account", 0m);
+        var account = await _user.CreateAccountAsync("Paging account", 1000m);
         var amounts = new[] { 10m, 50m, 30m, 20m, 40m };
         for (var i = 0; i < amounts.Length; i++)
         {

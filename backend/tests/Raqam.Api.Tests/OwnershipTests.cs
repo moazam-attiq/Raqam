@@ -107,7 +107,7 @@ public class OwnershipTests(ApiFactory factory)
     {
         var aliceAccount = await _alice.CreateAccountAsync("Alice only", 0m);
         var aliceCategory = await _alice.CreateCategoryAsync("Alice only cat", CategoryType.Expense);
-        var bobAccount = await _bob.CreateAccountAsync("Bob cash", 0m);
+        var bobAccount = await _bob.CreateAccountAsync("Bob cash", 100m);
         var bobAccount2 = await _bob.CreateAccountAsync("Bob bank", 0m);
         var bobCategory = await _bob.CreateCategoryAsync("Bob food", CategoryType.Expense);
 
@@ -145,7 +145,7 @@ public class OwnershipTests(ApiFactory factory)
     [Fact]
     public async Task Lists_and_filters_never_include_another_users_records()
     {
-        var aliceAccount = await _alice.CreateAccountAsync("Alice list account", 0m);
+        var aliceAccount = await _alice.CreateAccountAsync("Alice list account", 100m);
         var aliceCategory = await _alice.CreateCategoryAsync("Alice list category", CategoryType.Expense);
         var aliceTransaction = await _alice.CreateTransactionAsync(
             TransactionType.Expense, 20m, Date, aliceAccount.Id, categoryId: aliceCategory.Id, description: "alice list");
@@ -174,7 +174,7 @@ public class OwnershipTests(ApiFactory factory)
         // Alice as the owner in every body; the records still become Bob's.
         var account = await _bob.SendAsync<AccountResponse>(
             HttpMethod.Post, "/api/v1/accounts",
-            new { name = "Claimed for Alice", accountType = "Cash", openingBalance = 1m, userId = _alice.UserId },
+            new { name = "Claimed for Alice", accountType = "Cash", openingBalance = 100m, userId = _alice.UserId },
             HttpStatusCode.Created);
 
         var category = await _bob.SendAsync<CategoryResponse>(

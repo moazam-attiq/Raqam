@@ -1,4 +1,5 @@
 using Raqam.Application.Common;
+using Raqam.Application.Ledger;
 using Raqam.Domain.Accounts;
 
 namespace Raqam.Application.Accounts;
@@ -10,6 +11,7 @@ namespace Raqam.Application.Accounts;
 /// </summary>
 public class AccountService(
     IAccountRepository accounts,
+    BalanceGuard balanceGuard,
     IUnitOfWork unitOfWork,
     ICurrentUser currentUser,
     TimeProvider clock)
@@ -51,6 +53,11 @@ public class AccountService(
 
         var name = request.Name.Trim();
         await EnsureNameFreeAsync(name, account.Id, cancellationToken);
+
+        // Lowering the opening balance lowers the balance by the same amount, which may not
+        // take it below zero (D049). Raising it, or leaving it, is always fine.
+        await balanceGuard.EnsureNotOverdrawnAsync(
+            [new BalanceChange(account, request.OpeningBalance - account.OpeningBalance)], cancellationToken);
 
         accounts.ExpectVersion(account, request.Version);
         account.Update(

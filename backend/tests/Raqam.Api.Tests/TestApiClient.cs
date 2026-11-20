@@ -193,6 +193,7 @@ public static class TestDatabase
         var db = scope.ServiceProvider.GetRequiredService<RaqamDbContext>();
 
         await db.Database.ExecuteSqlInterpolatedAsync($"""DELETE FROM "Transactions" WHERE "UserId" = {userId}""");
+        await db.Database.ExecuteSqlInterpolatedAsync($"""DELETE FROM "Budgets" WHERE "UserId" = {userId}""");
         await db.Database.ExecuteSqlInterpolatedAsync($"""DELETE FROM "Categories" WHERE "UserId" = {userId} AND "ParentCategoryId" IS NOT NULL""");
         await db.Database.ExecuteSqlInterpolatedAsync($"""DELETE FROM "Categories" WHERE "UserId" = {userId}""");
         await db.Database.ExecuteSqlInterpolatedAsync($"""DELETE FROM "Accounts" WHERE "UserId" = {userId}""");
